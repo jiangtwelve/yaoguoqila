@@ -1,0 +1,3 @@
+display_name: Agent Project Continuity
+short_description: Durable memory and handoffs for agent projects.
+default_prompt: Create or update the project continuity docs for this repository so future agents can resume work across sessions.
