@@ -1,0 +1,24 @@
+{
+  "pages": [
+    {
+      "path": "pages/home/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "要过期啦"
+      }
+    },
+    {
+      "path": "pages/item-form/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "新增物品"
+      }
+    }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "要过期啦",
+    "navigationBarBackgroundColor": "#ffffff",
+    "backgroundColor": "#f6f7f4"
+  }
+}

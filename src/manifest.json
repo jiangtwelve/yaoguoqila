@@ -1,0 +1,15 @@
+{
+  "name": "要过期啦",
+  "appid": "__UNI__YAOGUOQILA",
+  "description": "家庭物品保质期管理",
+  "versionName": "0.1.0",
+  "versionCode": "1",
+  "transformPx": false,
+  "mp-weixin": {
+    "appid": "",
+    "setting": {
+      "urlCheck": false
+    },
+    "usingComponents": true
+  }
+}
