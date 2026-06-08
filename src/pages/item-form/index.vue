@@ -6,6 +6,7 @@ import { calculateExpiryDate, getItemStatus } from '@/domain/expiry';
 import type { ExpiryInputMode, Item, ItemFormOptions, ItemInput, ShelfLifeUnit } from '@/domain/models';
 import { createItem, getItemDetail, getItemFormOptions, updateItem } from '@/services/homeService';
 import { getNavigationSafeArea } from '@/utils/navigationSafeArea';
+import { markHomeNeedsRefresh, markItemDetailNeedsRefresh } from '@/utils/pageRefresh';
 
 const loading = ref(true);
 const saving = ref(false);
@@ -183,12 +184,20 @@ async function saveItem() {
   };
 
   try {
+    let savedItemId: string | undefined;
+
     if (itemId.value) {
-      await updateItem(itemId.value, input);
+      const updatedItem = await updateItem(itemId.value, input);
+      savedItemId = updatedItem.id;
     } else {
-      await createItem(options.value.family.id, input);
+      const createdItem = await createItem(options.value.family.id, input);
+      savedItemId = createdItem.id;
     }
 
+    markHomeNeedsRefresh(savedItemId);
+    if (itemId.value && savedItemId) {
+      markItemDetailNeedsRefresh(savedItemId);
+    }
     uni.navigateBack();
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '保存失败';
@@ -348,7 +357,7 @@ function goBack() {
   min-height: 100vh;
   position: relative;
   z-index: 1;
-  padding: 0 30rpx 82rpx;
+  padding: 0 30rpx calc(180rpx + env(safe-area-inset-bottom));
   box-sizing: border-box;
 }
 
@@ -378,6 +387,7 @@ function goBack() {
 
 .form {
   margin-top: 24rpx;
+  padding-bottom: 24rpx;
 }
 
 .photo-field {
@@ -730,9 +740,14 @@ function goBack() {
 }
 
 .save-button {
-  width: 100%;
+  position: fixed;
+  left: 30rpx;
+  right: 30rpx;
+  bottom: calc(24rpx + env(safe-area-inset-bottom));
+  z-index: 30;
+  width: auto;
   height: 88rpx;
-  margin-top: 42rpx;
+  margin-top: 0;
   border-radius: 999rpx;
   background: rgba(16, 20, 24, 0.82);
   color: #ffffff;

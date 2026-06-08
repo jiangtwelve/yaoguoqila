@@ -30,6 +30,8 @@ updated: 2026-06-06
 ## 已确认技术方向
 - Frontend: `uni-app + Vue 3 + TypeScript`。原因是三端通用优先级较高，需要同一套代码覆盖微信小程序、Android 和 iOS。
 - Backend: 微信云开发优先，包括云函数、云数据库、云存储。
+- Backend tooling: 使用 CloudBase MCP 辅助部署和联调微信云开发资源；本地模式通过 `npx @cloudbase/cloudbase-mcp@latest` 启动。
+- Cloud Function shape: TASK-011 采用单入口物理云函数 `yaoguoqiApi` 承载 `docs/api.md` 中的逻辑 service contract。前端调用 `yaoguoqiApi`，并在 payload 中传 `action`，例如 `item.createItem`；云函数内部统一分发、校验权限和映射字段。
 - Database: 微信云数据库，集合设计围绕 `users`、`families`、`familyMembers`、`items`、`locations`、`categories`、`notificationLogs`。
 - Auth: MVP 使用微信登录获取用户身份；App 端登录方式作为后续跨端扩展问题。
 - Storage: 微信云存储用于物品图片，前端通过上传适配层调用，避免页面直接依赖平台 API。
@@ -77,3 +79,5 @@ updated: 2026-06-06
 - 2026-06-06: 前端技术路线选择 `uni-app + Vue 3 + TypeScript`。
 - 2026-06-06: MVP 提醒能力选择应用内提醒优先，真实推送后续接入。
 - 2026-06-06: 后端技术路线选择微信云开发优先，包括云函数、云数据库、云存储和微信登录。
+- 2026-06-08: TASK-011 后端实现阶段使用 CloudBase MCP 辅助云函数、数据库、云存储和权限部署；当前配置已写入 Codex，全局 MCP 可能需要重启后生效。
+- 2026-06-08: TASK-011 使用单入口物理云函数 `yaoguoqiApi` 承载 validated service contract；按用户要求已清空旧云函数和旧集合后重新创建新后端资源。

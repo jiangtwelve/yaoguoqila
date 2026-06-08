@@ -4,7 +4,10 @@
       "path": "pages/home/index",
       "style": {
         "navigationStyle": "custom",
-        "navigationBarTitleText": "要过期啦"
+        "navigationBarTitleText": "要过期",
+        "enablePullDownRefresh": true,
+        "backgroundTextStyle": "dark",
+        "backgroundColor": "#f6f7f4"
       }
     },
     {
@@ -18,13 +21,16 @@
       "path": "pages/item-detail/index",
       "style": {
         "navigationStyle": "custom",
-        "navigationBarTitleText": "物品详情"
+        "navigationBarTitleText": "物品详情",
+        "enablePullDownRefresh": true,
+        "backgroundTextStyle": "dark",
+        "backgroundColor": "#f6f7f4"
       }
     }
   ],
   "globalStyle": {
     "navigationBarTextStyle": "black",
-    "navigationBarTitleText": "要过期啦",
+    "navigationBarTitleText": "要过期",
     "navigationBarBackgroundColor": "#ffffff",
     "backgroundColor": "#f6f7f4"
   }

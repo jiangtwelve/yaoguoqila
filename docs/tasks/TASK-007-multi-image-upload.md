@@ -1,12 +1,12 @@
 ---
 id: TASK-007
 title: 支持物品多图上传与首页封面图
-status: Current
+status: Done
 type: feature_implementation
 dependencies: [TASK-004, TASK-005, TASK-006]
 requires_user_acceptance: true
-acceptance_status: pending
-updated: 2026-06-07
+acceptance_status: accepted
+updated: 2026-06-08
 ---
 
 # TASK-007: 支持物品多图上传与首页封面图
@@ -38,6 +38,9 @@ updated: 2026-06-07
 - 每张图片支持单独删除；删除第一张后，下一张会成为新的 `imageUrls[0]`。
 - 首页列表和详情页优先使用 `imageUrls[0]`，兼容旧 `imageUrl`。
 - mock fixtures 已迁移到 `imageUrls`，API 草案同步记录多图字段。
+- 详情页有多张图片时使用走马灯展示，点击图片调用 `uni.previewImage` 放大预览。
+- 首页只在首次进入或收到数据变更标记时刷新，普通从详情页返回时保留滚动位置。
+- 新增或编辑物品保存后，首页刷新完成会自动滚动到目标物品卡片位置；刷新时不再用 loading 空状态替换首页内容，避免先回到顶部。
 
 ## Verification
 - `pnpm typecheck` 通过。

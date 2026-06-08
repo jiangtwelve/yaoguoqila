@@ -1,8 +1,135 @@
 ---
-updated: 2026-06-07
+updated: 2026-06-08
 ---
 
 # Dev Log
+
+## 2026-06-08 TASK-011 Cloud Environment Reset And Deploy
+- 用户要求先清空云环境中的旧函数和旧数据库集合，再继续 TASK-011 后端操作。
+- CloudBase Cleanup:
+  - 已删除 24 个旧云函数。
+  - 已删除 8 个旧集合：`drugNamesCache`、`families`、`items`、`locationHistory`、`medicines`、`notifications`、`pending_drugs`、`users`。
+  - 复查后云函数数为 0，集合数为 0。
+- CloudBase Setup:
+  - 已创建新集合：`users`、`families`、`items`、`locations`、`familyMembers`、`notificationLogs`。
+  - 已为新集合添加基础索引。
+  - 已创建并部署云函数 `yaoguoqiApi`，运行时 `Nodejs18.15`。
+  - 已将 `yaoguoqiApi` 从旧 `locationHistory` 集合切换为新 `locations` 集合。
+- Verification:
+  - CloudBase 复查：云函数列表仅剩 `yaoguoqiApi`。
+  - CloudBase 复查：集合列表为 `users`、`families`、`items`、`locations`、`familyMembers`、`notificationLogs`。
+  - MCP 管理端调用 `home.getFamilyHome` 返回 `无法获取用户身份`，符合无小程序 OPENID 的预期。
+  - `pnpm typecheck` 通过。
+  - `pnpm test` 通过。
+  - `pnpm build:mp-weixin` 通过。
+
+## 2026-06-08 TASK-011 Started / CloudBase MCP Prepared
+- 用户要求开始 TASK-011，并安装 CloudBase MCP 以便后续快捷部署云函数。
+- Research:
+  - CloudBase MCP 支持本地模式和托管模式。
+  - 本地模式通过 `npx @cloudbase/cloudbase-mcp@latest` 启动，功能最全，适合本项目后续云函数代码上传和部署。
+  - 工具能力覆盖环境登录/查询、NoSQL 数据库、云函数、云存储、权限、安全域名、日志等。
+- Changes:
+  - `docs/tasks.md` 当前任务切换到 TASK-011。
+  - `docs/tasks/TASK-011-wechat-cloud-backend-foundation.md` 标记为 Current，并补充 CloudBase MCP 准备事项。
+  - `~/.codex/config.toml` 已追加 `mcp_servers.cloudbase`。
+  - 新增 `docs/decisions/008-cloudbase-mcp-for-backend-deployment.md`。
+  - 更新 `docs/architecture.md` 与 `docs/handoff.md`。
+- Verification:
+  - `node --version` 为 v24.15.0，满足 CloudBase MCP 文档要求。
+  - 授权网络探测 `npx @cloudbase/cloudbase-mcp@latest --help` 成功解析到 `@cloudbase/cloudbase-mcp@2.21.1`。
+- Note:
+  - 当前 Codex 会话未热加载新 MCP；通常需要重启 Codex 或开启新会话后才能看到 `cloudbase` 工具。
+
+## 2026-06-08 TASK-009 Accepted / TASK-010 Started
+- 用户确认 TASK-009 下拉刷新验收完成。
+- Changes:
+  - `docs/tasks/TASK-009-pull-to-refresh.md` 标记为 Done，`acceptance_status` 标记为 accepted。
+  - 临时刷新失败 mock 开关已关闭，恢复正常刷新路径。
+  - `docs/tasks.md` 当前任务切换到 TASK-010。
+  - `docs/tasks/TASK-010-api-contract-validation.md` 标记为 Current。
+- Verification:
+  - `pnpm typecheck` 通过。
+  - `pnpm test` 通过。
+  - `pnpm build:mp-weixin` 通过。
+  - `pnpm test` 通过。
+  - `pnpm build:mp-weixin` 通过。
+- Next:
+  - 对齐 `docs/api.md` 与当前前端 service/domain 实际字段，将 API contract 升级为 `validated`。
+
+### TASK-010 API Contract Validated
+- Changes:
+  - `docs/api.md` frontmatter 从 `draft` 改为 `validated`。
+  - 首页 contract 对齐当前 `FamilyHome` 返回结构：`user`、`currentFamily`、`families`、`locations`、`items`。
+  - 补齐 `Item.locationName`、`FamilyHome`、`ItemDetail`、`ItemInput` 和多图字段约定。
+  - 补齐 `GET /items/{itemId}` / `item.getItemDetail` contract。
+  - 云函数 payload/result 对齐 `HomeRepository` 与 `CloudHomeRepository`。
+  - 新增 TASK-011，用于后续微信云开发后端基础能力实现。
+- Verification:
+  - `pnpm typecheck` 通过。
+  - `pnpm test` 通过。
+
+## 2026-06-08 TASK-008 Accepted / TASK-009 Implemented
+- 用户确认 TASK-008 首页左滑删除与二次确认验收通过，并要求继续。
+- Changes:
+  - `docs/tasks/TASK-008-swipe-delete.md` 标记为 Done，`acceptance_status` 标记为 accepted。
+  - `docs/tasks.md` 当前任务切换到 TASK-009。
+  - `src/pages.json` 为首页、详情页开启小程序原生下拉刷新；新增/编辑页不启用下拉刷新。
+  - 首页接入 `onPullDownRefresh`，刷新当前家庭和物品列表，保留当前搜索词，并收起已打开的左滑删除行。
+  - 详情页接入 `onPullDownRefresh`，刷新当前物品详情，不切换到整页空白 loading。
+  - 刷新成功后不弹“已刷新”提示，使用原生下拉区域 loading 表达刷新中；失败时才给轻提示。
+  - 新增 `finishPullDownRefresh()`，让 mock 数据快速返回时也有可感知的下拉 loading 停留时间。
+- Verification:
+  - `pnpm typecheck` 通过。
+  - `pnpm test` 通过。
+  - `pnpm build:mp-weixin` 通过。
+- Acceptance:
+  - TASK-009 需要用户验收，暂不标记 Done。
+
+## 2026-06-08 TASK-007 Accepted / TASK-008 Implemented
+- 用户确认 TASK-007 多图上传与首页封面图验收完成，并要求开始 TASK-008。
+- Changes:
+  - `docs/tasks/TASK-007-multi-image-upload.md` 标记为 Done，`acceptance_status` 标记为 accepted。
+  - `docs/tasks.md` 当前任务切换到 TASK-008，TASK-009 下拉刷新与 TASK-010 API contract 保持后续顺序。
+  - 首页物品列表接入左滑删除交互：左滑露出右侧删除按钮，点击后弹出二次确认。
+  - 确认删除后调用 `deleteItem`，同步移除 `home.items` 和 `visibleItems`，让列表与顶部统计立即更新。
+- Verification:
+  - `pnpm typecheck` 通过。
+  - `pnpm test` 通过。
+  - `pnpm build:mp-weixin` 通过。
+- Acceptance:
+  - TASK-008 需要用户验收，暂不标记 Done。
+
+## 2026-06-08 Home List Performance Direction
+- 用户提出首页列表无分页时，大数据量场景下的性能问题。
+- Decision:
+  - 当前阶段先记录为后续设计任务，不在 TASK-007 中扩张实现范围。
+  - 产品方向采用“近期优先”：首页重点展示已过期、今天到期、7 天内、30 天内等更需要处理的物品。
+  - 数据量增大后采用分组折叠/懒加载；必要时配合后端游标分页和小程序端虚拟列表。
+  - 搜索和排序应逐步下沉到 service/API 层，避免页面直接处理大量数据。
+- Changes:
+  - `docs/tasks.md` Backlog 新增首页大数据量列表策略设计。
+
+## 2026-06-08 Product Naming Update
+- 用户确认小程序正式名称为「要过期」。
+- Changes:
+  - 同步 AGENTS.md、docs/product.md、docs/decisions/001-project-memory-and-initial-product-direction.md、docs/tasks/TASK-001-product-and-tech-discovery.md 和 docs/dev-log.md 中的旧名称。
+  - 同步 `src/manifest.json`、`src/pages.json` 和 `src/pages/home/index.vue` 中的小程序展示名。
+  - 将核心介绍中的品类表述收敛为「食物、日用品等物品」，避免出现相关品类关键词。
+- Verification:
+  - 旧名称全文检索无残留。
+  - `pnpm typecheck` 通过。
+
+## 2026-06-08 Pull To Refresh Task Inserted
+- 用户希望在所有页面新增下拉刷新能力，并要求该功能开发任务放到首页左滑删除后面，先设计交互供审核。
+- Changes:
+  - 新增 `docs/tasks/TASK-009-pull-to-refresh.md`，记录全页面下拉刷新交互设计草案。
+  - 原 API contract 验证任务顺延为 `docs/tasks/TASK-010-api-contract-validation.md`。
+  - 更新 `docs/tasks.md` Ready 队列：TASK-008 左滑删除、TASK-009 下拉刷新、TASK-010 API contract。
+  - 更新 `docs/handoff.md` 的后续任务顺序和关键文件列表。
+- Review:
+  - 用户已确认 TASK-009 交互方向。
+  - TASK-009 不提前实现，仍排在 TASK-008 左滑删除后。
 
 ## 2026-06-07 TASK-006 Accepted / TASK-007 Started
 - 用户确认 TASK-006 物品详情与处理操作原型可以标记为验收完成。
@@ -20,6 +147,9 @@ updated: 2026-06-07
   - 新增/编辑表单图片区改为多图网格，最多选择 9 张图片。
   - 第一张图片显示「封面」标记，每张图片可单独删除。
   - 首页列表和详情页优先使用 `imageUrls[0]`，兼容旧 `imageUrl`。
+  - 根据用户反馈，详情页多图改为走马灯展示，并支持点击图片放大预览。
+  - 根据用户反馈，首页普通从详情页返回时不再强制刷新，保留滚动位置；新增、编辑、用完、删除后通过刷新标记更新首页。
+  - 根据用户反馈，新增或编辑物品保存后刷新首页并自动滚动到目标物品卡片位置；刷新时不再用 loading 空状态替换首页内容，避免先回到顶部。
   - mock fixtures 和 mock repository 已同步多图字段。
   - `docs/api.md` 草案同步记录多图字段，待 TASK-009 再稳定 API contract。
 - Verification:
@@ -265,7 +395,7 @@ updated: 2026-06-07
   - `pnpm build:mp-weixin` 通过。
 
 ## 2026-06-06
-- Goal: 初始化「要过期啦」项目连续性文档，并把用户的产品设想整理为可继续推进的项目记忆。
+- Goal: 初始化「要过期」项目连续性文档，并把用户的产品设想整理为可继续推进的项目记忆。
 - Changes:
   - 新增 AGENTS.md，定义后续 agent 协作、短提示恢复、确认规则和 UI 验收规则。
   - 新增 docs/product.md，整理产品方向、MVP 建议、核心流程、家庭/物品/提醒模型。
@@ -298,3 +428,20 @@ updated: 2026-06-07
 - 已更新 docs/page-map.md、docs/product.md、docs/api.md、TASK-002 和 docs/handoff.md。
 - 用户修正无家庭流程：无家庭时首页展示空家庭状态，允许创建家庭或接受邀请加入家庭，不直接弹出创建家庭弹窗。
 - 已更新 docs/page-map.md、docs/product.md、TASK-002 和 docs/handoff.md。
+## 2026-06-08 TASK-011 CloudBase Backend Foundation
+- Goal: Codex 重启后继续搭建微信云开发后端基础能力。
+- CloudBase MCP:
+  - MCP 已可用，并自动绑定环境 `cloud1-d8gr12cmd6578bfd0`。
+  - 已只读盘点云函数和集合；当前云环境不是空环境。
+- Findings:
+  - 已有历史函数：`login`、`familyCreate`、`familyList`、`userSwitchFamily`、`locationHistory`、`itemList`、`itemAdd`、`itemDetail`、`itemUpdate`、`itemDelete` 等。
+  - 已有集合：`users`、`families`、`items`、`locationHistory` 等。
+  - 历史函数字段模型使用 `expireDate`、`photoFileIds`、`location`、`remark` 等，和当前 `docs/api.md` 的 `expiresAt`、`imageUrls`、`locationName`、`note` 不完全一致。
+  - `itemList`、`locationHistory` 等读接口缺少家庭成员权限校验。
+- Changes:
+  - 新增决策 `docs/decisions/009-cloud-function-router.md`，确认使用单入口物理云函数 `yaoguoqiApi` 承载 validated service contract。
+  - 新增本地云函数 `cloudfunctions/yaoguoqiApi`，实现首页、昵称、创建家庭、表单选项、物品列表、详情、新增、编辑、标记用完和删除的路由分发、字段映射和权限校验。
+  - 更新 `src/services/cloud/wechatCloudClient.ts`，前端逻辑动作通过 `yaoguoqiApi` 的 `action/payload` 调用。
+  - 更新 architecture、api、TASK-011 和 handoff 文档。
+- Verification:
+  - `pnpm typecheck` 通过。

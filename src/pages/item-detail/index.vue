@@ -1,15 +1,20 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { onLoad, onShow } from '@dcloudio/uni-app';
+import { onLoad, onPullDownRefresh, onShow } from '@dcloudio/uni-app';
 import AppNavBar from '@/components/AppNavBar.vue';
 import type { Item, ItemDetail } from '@/domain/models';
 import { daysUntil } from '@/domain/expiry';
 import { consumeItem, deleteItem, getItemDetail } from '@/services/homeService';
 import { getNavigationSafeArea } from '@/utils/navigationSafeArea';
+import { consumeItemDetailNeedsRefresh, markHomeNeedsRefresh } from '@/utils/pageRefresh';
+import { MOCK_PULL_DOWN_REFRESH_FAILURE, waitForFailedRefreshIndicator, waitForMinimumRefreshIndicator } from '@/utils/pullDownRefresh';
+
+type PullRefreshState = 'idle' | 'refreshing' | 'failed';
 
 const itemId = ref('');
 const loading = ref(true);
 const operating = ref(false);
+const pullRefreshState = ref<PullRefreshState>('idle');
 const errorMessage = ref('');
 const detail = ref<ItemDetail | null>(null);
 const navTopPx = ref(24);
@@ -20,6 +25,10 @@ const item = computed(() => detail.value?.item ?? null);
 const shellStyle = computed(() => ({
   paddingTop: `${navTopPx.value + navHeightPx.value + 18}px`
 }));
+const refreshIndicatorStyle = computed(() => ({
+  top: `${navTopPx.value + navHeightPx.value + 10}px`
+}));
+const pullRefreshText = computed(() => (pullRefreshState.value === 'failed' ? '刷新失败，稍后再试' : '正在刷新'));
 const navStyle = computed(() => ({
   top: `${navTopPx.value}px`,
   minHeight: `${navHeightPx.value}px`,
@@ -29,6 +38,11 @@ const statusClass = computed(() => (item.value ? `status-${item.value.status.rep
 const statusText = computed(() => (item.value ? getStatusText(item.value) : ''));
 const daysText = computed(() => (item.value ? getDaysText(item.value) : ''));
 const coverImage = computed(() => (item.value ? item.value.imageUrls[0] ?? item.value.imageUrl ?? null : null));
+const itemImages = computed(() => {
+  if (!item.value) return [];
+
+  return item.value.imageUrls.length ? item.value.imageUrls : item.value.imageUrl ? [item.value.imageUrl] : [];
+});
 const dateModeText = computed(() => {
   if (!item.value) return '';
   if (item.value.expiryInputMode === 'production_date_and_shelf_life') {
@@ -45,9 +59,13 @@ onLoad((query) => {
 });
 
 onShow(() => {
-  if (itemId.value) {
+  if (itemId.value && consumeItemDetailNeedsRefresh(itemId.value)) {
     void loadDetail();
   }
+});
+
+onPullDownRefresh(() => {
+  void refreshDetail();
 });
 
 function updateTopSafePadding() {
@@ -58,22 +76,53 @@ function updateTopSafePadding() {
   capsuleReservePx.value = safeArea.capsuleReservePx;
 }
 
-async function loadDetail() {
+async function loadDetail(): Promise<boolean> {
   if (!itemId.value) {
     errorMessage.value = '缺少物品信息';
     loading.value = false;
-    return;
+    return false;
   }
 
-  loading.value = true;
+  loading.value = !detail.value;
   errorMessage.value = '';
 
   try {
     detail.value = await getItemDetail(itemId.value);
+    return true;
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '加载失败';
+    return false;
   } finally {
     loading.value = false;
+  }
+}
+
+async function refreshDetail() {
+  const startedAt = Date.now();
+  let refreshed = false;
+
+  uni.stopPullDownRefresh();
+  pullRefreshState.value = 'refreshing';
+
+  try {
+    if (MOCK_PULL_DOWN_REFRESH_FAILURE) {
+      refreshed = false;
+    } else {
+      refreshed = await loadDetail();
+    }
+  } catch {
+    refreshed = false;
+  } finally {
+    await waitForMinimumRefreshIndicator(startedAt);
+
+    if (refreshed) {
+      pullRefreshState.value = 'idle';
+      return;
+    }
+
+    pullRefreshState.value = 'failed';
+    await waitForFailedRefreshIndicator();
+    pullRefreshState.value = 'idle';
   }
 }
 
@@ -95,6 +144,7 @@ async function handleConsume() {
   operating.value = true;
   try {
     await consumeItem(item.value.id);
+    markHomeNeedsRefresh();
     await loadDetail();
     void uni.showToast({ title: '已标记用完', icon: 'success' });
   } catch (error) {
@@ -126,6 +176,7 @@ async function handleDelete() {
   operating.value = true;
   try {
     await deleteItem(item.value.id);
+    markHomeNeedsRefresh();
     void uni.showToast({ title: '已删除', icon: 'success' });
     setTimeout(() => {
       void uni.navigateBack();
@@ -162,11 +213,30 @@ function getShelfLifeUnitText(unit: Item['shelfLifeUnit']): string {
 
   return '月';
 }
+
+function previewImage(index: number) {
+  if (!itemImages.value.length) return;
+
+  void uni.previewImage({
+    urls: itemImages.value,
+    current: itemImages.value[index]
+  });
+}
 </script>
 
 <template>
   <view class="page">
     <AppNavBar title="物品详情" :nav-style="navStyle" show-back @back="goBack" />
+
+    <view
+      v-if="pullRefreshState !== 'idle'"
+      class="pull-refresh-indicator"
+      :class="{ failed: pullRefreshState === 'failed' }"
+      :style="refreshIndicatorStyle"
+    >
+      <view v-if="pullRefreshState === 'refreshing'" class="refresh-spinner"></view>
+      <text>{{ pullRefreshText }}</text>
+    </view>
 
     <view class="shell" :style="shellStyle">
       <view v-if="loading" class="quiet-state">
@@ -182,29 +252,29 @@ function getShelfLifeUnitText(unit: Item['shelfLifeUnit']): string {
       <view v-else-if="item" class="detail-stack">
         <view class="hero-card" :class="[statusClass, coverImage ? 'hero-with-image' : 'hero-no-image']">
           <view v-if="coverImage" class="hero-image-wrap">
-            <image class="hero-image" :src="coverImage" mode="aspectFill" />
+            <swiper class="hero-swiper" indicator-dots circular indicator-color="rgba(255, 255, 255, 0.46)" indicator-active-color="#ffffff">
+              <swiper-item v-for="(url, index) in itemImages" :key="url">
+                <image class="hero-image" :src="url" mode="aspectFill" @click="previewImage(index)" />
+              </swiper-item>
+            </swiper>
+            <text v-if="itemImages.length > 1" class="image-count">{{ itemImages.length }} 张</text>
             <text class="status-pill">{{ statusText }}</text>
           </view>
 
-          <view v-else class="no-image-head">
-            <view class="item-symbol">
-              <view class="symbol-sheet">
-                <view class="symbol-dot"></view>
-                <view class="symbol-line symbol-line-long"></view>
-                <view class="symbol-line symbol-line-short"></view>
+          <view v-else class="hero-image-wrap">
+            <view class="empty-photo">
+              <view class="empty-photo-mark">
+                <view class="empty-photo-corner"></view>
+                <view class="empty-photo-sun"></view>
+                <view class="empty-photo-line empty-photo-line-long"></view>
+                <view class="empty-photo-line empty-photo-line-short"></view>
               </view>
+              <text class="empty-photo-text">暂无图片</text>
             </view>
-
-            <view class="hero-copy">
-              <text class="family-name">{{ detail?.family?.name ?? '当前家庭' }}</text>
-              <text class="item-name">{{ item.name }}</text>
-              <text class="days-text">{{ daysText }}</text>
-            </view>
-
             <text class="status-pill">{{ statusText }}</text>
           </view>
 
-          <view v-if="coverImage" class="hero-copy">
+          <view class="hero-copy">
             <text class="family-name">{{ detail?.family?.name ?? '当前家庭' }}</text>
             <text class="item-name">{{ item.name }}</text>
             <text class="days-text">{{ daysText }}</text>
@@ -271,9 +341,56 @@ button::after {
 .shell {
   position: relative;
   padding-right: 28rpx;
-  padding-bottom: calc(38rpx + env(safe-area-inset-bottom));
+  padding-bottom: calc(154rpx + env(safe-area-inset-bottom));
   padding-left: 28rpx;
   box-sizing: border-box;
+}
+
+.pull-refresh-indicator {
+  position: fixed;
+  left: 50%;
+  z-index: 11;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+  height: 56rpx;
+  padding: 0 24rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.62);
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.66);
+  box-shadow: 0 14rpx 34rpx rgba(45, 74, 110, 0.1), inset 0 1rpx 0 rgba(255, 255, 255, 0.82);
+  color: rgba(16, 20, 24, 0.52);
+  font-size: 24rpx;
+  transform: translateX(-50%);
+  backdrop-filter: blur(22rpx);
+  -webkit-backdrop-filter: blur(22rpx);
+}
+
+.pull-refresh-indicator.failed {
+  border-color: rgba(229, 72, 63, 0.18);
+  background: rgba(255, 247, 246, 0.82);
+  color: #e5483f;
+}
+
+.refresh-spinner {
+  width: 26rpx;
+  height: 26rpx;
+  border: 3rpx solid rgba(79, 127, 120, 0.18);
+  border-top-color: #4f7f78;
+  border-radius: 50%;
+  animation: refresh-spin 820ms linear infinite;
+  box-sizing: border-box;
+}
+
+@keyframes refresh-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .quiet-state {
@@ -327,10 +444,6 @@ button::after {
   padding: 22rpx;
 }
 
-.hero-no-image {
-  padding: 28rpx;
-}
-
 .family-name {
   overflow: hidden;
   color: rgba(16, 20, 24, 0.48);
@@ -356,12 +469,6 @@ button::after {
   backdrop-filter: blur(16rpx);
 }
 
-.hero-no-image .status-pill {
-  position: static;
-  align-self: flex-start;
-  margin-left: auto;
-}
-
 .status-expired .status-pill {
   background: rgba(255, 238, 236, 0.82);
   color: #e5483f;
@@ -383,71 +490,106 @@ button::after {
   width: 100%;
 }
 
+.hero-swiper,
 .hero-image {
   width: 100%;
   height: 356rpx;
   border-radius: 26rpx;
   overflow: hidden;
+}
+
+.hero-swiper {
   background: rgba(255, 255, 255, 0.68);
   box-shadow: inset 0 0 0 1rpx rgba(16, 20, 24, 0.04);
 }
 
-.no-image-head {
-  display: flex;
-  align-items: center;
-  gap: 22rpx;
+.hero-image {
+  display: block;
 }
 
-.item-symbol {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  width: 104rpx;
-  height: 104rpx;
-  border-radius: 28rpx;
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.78), rgba(235, 243, 241, 0.58));
-  box-shadow:
-    inset 0 1rpx 0 rgba(255, 255, 255, 0.88),
-    0 10rpx 22rpx rgba(51, 86, 81, 0.06);
+.image-count {
+  position: absolute;
+  left: 18rpx;
+  bottom: 18rpx;
+  height: 42rpx;
+  padding: 0 16rpx;
+  border-radius: 99rpx;
+  background: rgba(16, 20, 24, 0.36);
+  color: #fff;
+  font-size: 22rpx;
+  line-height: 42rpx;
+  backdrop-filter: blur(14rpx);
+  -webkit-backdrop-filter: blur(14rpx);
 }
 
-.symbol-sheet {
+.empty-photo {
   position: relative;
-  width: 44rpx;
-  height: 52rpx;
-  border: 2rpx solid rgba(16, 20, 24, 0.36);
-  border-radius: 12rpx;
+  display: flex;
+  width: 100%;
+  height: 356rpx;
+  overflow: hidden;
+  align-items: center;
+  flex-direction: column;
+  justify-content: center;
+  gap: 18rpx;
+  border-radius: 26rpx;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: inset 0 0 0 1rpx rgba(16, 20, 24, 0.04);
+}
+
+.empty-photo-mark {
+  position: relative;
+  width: 112rpx;
+  height: 86rpx;
+  border: 3rpx solid rgba(79, 127, 120, 0.28);
+  border-radius: 24rpx;
+  background: rgba(255, 255, 255, 0.26);
   box-sizing: border-box;
 }
 
-.symbol-dot {
+.empty-photo-corner {
   position: absolute;
-  top: 11rpx;
-  left: 10rpx;
-  width: 7rpx;
-  height: 7rpx;
+  top: -3rpx;
+  right: -3rpx;
+  width: 28rpx;
+  height: 28rpx;
+  border-top: 3rpx solid rgba(79, 127, 120, 0.22);
+  border-right: 3rpx solid rgba(79, 127, 120, 0.22);
+  border-radius: 0 22rpx 0 0;
+}
+
+.empty-photo-sun {
+  position: absolute;
+  top: 20rpx;
+  right: 24rpx;
+  width: 14rpx;
+  height: 14rpx;
   border-radius: 50%;
-  background: rgba(16, 20, 24, 0.36);
+  background: rgba(79, 127, 120, 0.26);
 }
 
-.symbol-line {
+.empty-photo-line {
   position: absolute;
-  left: 10rpx;
-  height: 3rpx;
+  left: 26rpx;
+  height: 4rpx;
   border-radius: 99rpx;
-  background: rgba(16, 20, 24, 0.28);
+  background: rgba(79, 127, 120, 0.2);
 }
 
-.symbol-line-long {
-  right: 10rpx;
-  bottom: 18rpx;
+.empty-photo-line-long {
+  right: 24rpx;
+  bottom: 30rpx;
 }
 
-.symbol-line-short {
-  width: 16rpx;
-  bottom: 11rpx;
+.empty-photo-line-short {
+  width: 36rpx;
+  bottom: 20rpx;
+}
+
+.empty-photo-text {
+  position: relative;
+  color: rgba(16, 20, 24, 0.36);
+  font-size: 24rpx;
 }
 
 .hero-copy {
@@ -459,10 +601,6 @@ button::after {
   padding: 0 4rpx 4rpx;
 }
 
-.hero-no-image .hero-copy {
-  padding: 0;
-}
-
 .item-name {
   overflow: hidden;
   font-size: 52rpx;
@@ -470,10 +608,6 @@ button::after {
   line-height: 1.12;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.hero-no-image .item-name {
-  font-size: 46rpx;
 }
 
 .days-text {
@@ -586,6 +720,11 @@ button::after {
 }
 
 .action-panel {
+  position: fixed;
+  left: 28rpx;
+  right: 28rpx;
+  bottom: calc(24rpx + env(safe-area-inset-bottom));
+  z-index: 30;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 12rpx;

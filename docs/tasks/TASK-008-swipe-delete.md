@@ -1,12 +1,12 @@
 ---
 id: TASK-008
 title: 支持首页物品左滑删除与二次确认
-status: Ready
+status: Done
 type: feature_implementation
 dependencies: [TASK-004, TASK-005, TASK-007]
 requires_user_acceptance: true
-acceptance_status: pending
-updated: 2026-06-07
+acceptance_status: accepted
+updated: 2026-06-08
 ---
 
 # TASK-008: 支持首页物品左滑删除与二次确认
@@ -30,7 +30,15 @@ updated: 2026-06-07
 - 删除前有确认提示，避免误删。
 - 删除后首页列表和临期/过期统计同步更新。
 
+## Implementation Notes
+- 首页物品行改为 `swipe-row` 容器，左滑后将物品卡片横向平移，露出右侧删除按钮。
+- 删除按钮点击后通过 `uni.showModal` 二次确认。
+- 确认后调用 `deleteItem(item.id)`，并同步更新 `home.items` 与 `visibleItems`，让列表和顶部统计立即刷新。
+- mock repository 已有 `deleteItem` 能力，本任务接入首页交互层。
+- 修复首版问题：删除层默认渲染在右侧且被透明物品行透出。现在删除层默认隐藏、不可点击，只有当前行左滑打开时才显示。
+- 优化滑动动画：从“松手后切换位移”改为手指移动时前景行跟随滑动；删除层保持稳定底层，不再做淡入，减少白色闪动。
+
 ## Verification
-- `pnpm typecheck`
-- `pnpm test`
-- `pnpm build:mp-weixin`
+- `pnpm typecheck` 通过。
+- `pnpm test` 通过。
+- `pnpm build:mp-weixin` 通过。

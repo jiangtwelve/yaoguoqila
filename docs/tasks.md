@@ -1,22 +1,22 @@
 ---
 status: active
-current_task: TASK-007
-updated: 2026-06-07
+current_task: TASK-011
+updated: 2026-06-08
 ---
 
 # Tasks
 
 ## Current
-- TASK-007: 支持物品多图上传与首页封面图。
+- TASK-011: 搭建微信云开发后端基础能力。
 
 ## Ready
-- TASK-008: 支持首页物品左滑删除与二次确认。
-- TASK-009: 基于已验证前端更新 API contract。
+- 暂无。
 
 ## Blocked
 - 暂无。
 
 ## Backlog
+- 首页大数据量列表策略设计：近期优先、分组折叠/懒加载，必要时配合游标分页和虚拟列表。
 - 家庭成员邀请与权限细分。
 - 微信订阅消息正式模板配置。
 - Android/iOS 推送服务接入。
@@ -32,3 +32,7 @@ updated: 2026-06-07
 - TASK-004: 重新确认家庭首页 Design Anchor。
 - TASK-005: 新增/编辑物品表单原型验收完成。
 - TASK-006: 物品详情与处理操作原型验收完成。
+- TASK-007: 多图上传与首页封面图验收完成。
+- TASK-008: 首页物品左滑删除与二次确认验收完成。
+- TASK-009: 全页面下拉刷新验收完成。
+- TASK-010: API contract 验证完成。

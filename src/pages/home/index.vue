@@ -1,10 +1,14 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
-import { onShow } from '@dcloudio/uni-app';
+import { computed, nextTick, onMounted, ref } from 'vue';
+import { onPullDownRefresh, onShow } from '@dcloudio/uni-app';
 import type { FamilyHome, Item } from '@/domain/models';
 import { daysUntil } from '@/domain/expiry';
-import { getFamilyHome, searchItems } from '@/services/homeService';
+import { deleteItem, getFamilyHome, searchItems } from '@/services/homeService';
 import { getNavigationSafeArea } from '@/utils/navigationSafeArea';
+import { consumeHomeRefreshRequest } from '@/utils/pageRefresh';
+import { MOCK_PULL_DOWN_REFRESH_FAILURE, waitForFailedRefreshIndicator, waitForMinimumRefreshIndicator } from '@/utils/pullDownRefresh';
+
+type PullRefreshState = 'idle' | 'refreshing' | 'failed';
 
 const loading = ref(true);
 const errorMessage = ref('');
@@ -15,6 +19,16 @@ const navHeightPx = ref(40);
 const capsuleReservePx = ref(118);
 const home = ref<FamilyHome | null>(null);
 const visibleItems = ref<Item[]>([]);
+const loadedOnce = ref(false);
+const pullRefreshState = ref<PullRefreshState>('idle');
+const openSwipeItemId = ref('');
+const draggingItemId = ref('');
+const touchStartX = ref(0);
+const touchStartOffsetPx = ref(0);
+const swipeOffsetPx = ref(0);
+const deleteWidthPx = ref(76);
+const suppressNextTap = ref(false);
+const deletingItemId = ref('');
 
 const hasFamily = computed(() => Boolean(home.value?.currentFamily));
 const needsProfileName = computed(() => Boolean(home.value && !home.value.user.hasSetDisplayName));
@@ -30,6 +44,10 @@ const itemCountText = computed(() => `共 ${inventoryItems.value.length} 件物�
 const shellStyle = computed(() => ({
   paddingTop: `${navTopPx.value + navHeightPx.value + 18}px`
 }));
+const refreshIndicatorStyle = computed(() => ({
+  top: `${navTopPx.value + navHeightPx.value + 10}px`
+}));
+const pullRefreshText = computed(() => (pullRefreshState.value === 'failed' ? '刷新失败，稍后再试' : '正在刷新'));
 const navStyle = computed(() => ({
   top: `${navTopPx.value}px`,
   minHeight: `${navHeightPx.value}px`,
@@ -38,10 +56,19 @@ const navStyle = computed(() => ({
 
 onMounted(() => {
   updateTopSafePadding();
+  updateSwipeMetrics();
 });
 
 onShow(() => {
-  void loadHome();
+  const refreshRequest = consumeHomeRefreshRequest();
+
+  if (!loadedOnce.value || refreshRequest.needsRefresh) {
+    void loadHome(refreshRequest.targetItemId);
+  }
+});
+
+onPullDownRefresh(() => {
+  void refreshHome();
 });
 
 function updateTopSafePadding() {
@@ -52,23 +79,83 @@ function updateTopSafePadding() {
   capsuleReservePx.value = safeArea.capsuleReservePx;
 }
 
-async function loadHome() {
-  loading.value = true;
+function updateSwipeMetrics() {
+  const systemInfo = uni.getSystemInfoSync();
+
+  deleteWidthPx.value = Math.round((systemInfo.windowWidth || 375) * 152 / 750);
+}
+
+async function loadHome(targetItemId: string | null = null): Promise<boolean> {
+  loading.value = !loadedOnce.value;
   errorMessage.value = '';
 
   try {
     home.value = await getFamilyHome();
     if (!home.value.currentFamily) {
       visibleItems.value = [];
-      return;
+      return true;
+    }
+
+    if (targetItemId) {
+      search.value = '';
     }
 
     visibleItems.value = search.value.trim() ? await searchItems(home.value.currentFamily.id, search.value) : home.value.items;
+
+    if (targetItemId && visibleItems.value.some((item) => item.id === targetItemId)) {
+      await scrollToItem(targetItemId);
+    }
+
+    return true;
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '加载失败';
+    return false;
   } finally {
     loading.value = false;
+    loadedOnce.value = true;
   }
+}
+
+async function refreshHome() {
+  const startedAt = Date.now();
+  let refreshed = false;
+
+  uni.stopPullDownRefresh();
+  pullRefreshState.value = 'refreshing';
+  openSwipeItemId.value = '';
+
+  try {
+    if (MOCK_PULL_DOWN_REFRESH_FAILURE) {
+      refreshed = false;
+    } else {
+      refreshed = await loadHome();
+    }
+  } catch {
+    refreshed = false;
+  } finally {
+    await waitForMinimumRefreshIndicator(startedAt);
+
+    if (refreshed) {
+      pullRefreshState.value = 'idle';
+      return;
+    }
+
+    pullRefreshState.value = 'failed';
+    await waitForFailedRefreshIndicator();
+    pullRefreshState.value = 'idle';
+  }
+}
+
+async function scrollToItem(itemId: string) {
+  await nextTick();
+
+  setTimeout(() => {
+    void uni.pageScrollTo({
+      selector: `#item-${itemId}`,
+      offsetTop: navTopPx.value + navHeightPx.value + 12,
+      duration: 320
+    });
+  }, 80);
 }
 
 async function handleSearch(value: string) {
@@ -123,6 +210,113 @@ function getItemCover(item: Item): string | null {
   return item.imageUrls[0] ?? item.imageUrl ?? null;
 }
 
+function getSwipeStyle(item: Item) {
+  if (draggingItemId.value === item.id) {
+    return {
+      transform: `translate3d(${swipeOffsetPx.value}px, 0, 0)`,
+      transition: 'none'
+    };
+  }
+
+  return {
+    transform: openSwipeItemId.value === item.id ? `translate3d(${-deleteWidthPx.value}px, 0, 0)` : 'translate3d(0, 0, 0)'
+  };
+}
+
+function handleItemTouchStart(event: TouchEvent, item: Item) {
+  touchStartX.value = event.touches[0]?.clientX ?? 0;
+  draggingItemId.value = item.id;
+  touchStartOffsetPx.value = openSwipeItemId.value === item.id ? -deleteWidthPx.value : 0;
+  swipeOffsetPx.value = touchStartOffsetPx.value;
+
+  if (openSwipeItemId.value && openSwipeItemId.value !== item.id) {
+    openSwipeItemId.value = '';
+  }
+}
+
+function handleItemTouchMove(event: TouchEvent, item: Item) {
+  if (draggingItemId.value !== item.id) return;
+
+  const currentX = event.touches[0]?.clientX ?? touchStartX.value;
+  const deltaX = currentX - touchStartX.value;
+  const nextOffset = touchStartOffsetPx.value + deltaX;
+
+  swipeOffsetPx.value = Math.min(0, Math.max(-deleteWidthPx.value, nextOffset));
+}
+
+function handleItemTouchEnd(event: TouchEvent, item: Item) {
+  const endX = event.changedTouches[0]?.clientX ?? touchStartX.value;
+  const deltaX = endX - touchStartX.value;
+  const shouldOpen = swipeOffsetPx.value < -deleteWidthPx.value * 0.38 || deltaX < -36;
+
+  if (Math.abs(deltaX) > 8) {
+    suppressNextTap.value = true;
+    setTimeout(() => {
+      suppressNextTap.value = false;
+    }, 120);
+  }
+
+  draggingItemId.value = '';
+
+  if (shouldOpen) {
+    openSwipeItemId.value = item.id;
+    return;
+  }
+
+  if (deltaX > 24 || swipeOffsetPx.value > -deleteWidthPx.value * 0.38) {
+    openSwipeItemId.value = '';
+  }
+}
+
+function handleItemTap(item: Item) {
+  if (suppressNextTap.value) {
+    suppressNextTap.value = false;
+    return;
+  }
+
+  if (openSwipeItemId.value) {
+    openSwipeItemId.value = '';
+    return;
+  }
+
+  goToItemDetail(item);
+}
+
+function confirmDeleteItem(item: Item) {
+  void uni.showModal({
+    title: '删除物品',
+    content: `确认删除「${item.name}」吗？`,
+    confirmText: '删除',
+    confirmColor: '#e5483f',
+    success: (result) => {
+      if (result.confirm) {
+        void removeItem(item);
+      }
+    }
+  });
+}
+
+async function removeItem(item: Item) {
+  deletingItemId.value = item.id;
+
+  try {
+    await deleteItem(item.id);
+    home.value = home.value
+      ? {
+          ...home.value,
+          items: home.value.items.filter((candidate) => candidate.id !== item.id)
+        }
+      : null;
+    visibleItems.value = visibleItems.value.filter((candidate) => candidate.id !== item.id);
+    openSwipeItemId.value = '';
+    void uni.showToast({ title: '已删除', icon: 'success' });
+  } catch (error) {
+    void uni.showToast({ title: error instanceof Error ? error.message : '删除失败', icon: 'none' });
+  } finally {
+    deletingItemId.value = '';
+  }
+}
+
 function goToNewItem() {
   void uni.navigateTo({
     url: '/pages/item-form/index'
@@ -144,8 +338,18 @@ function goToItemDetail(item: Item) {
             <text>{{ home?.currentFamily?.name }}</text>
             <text class="chevron">⌄</text>
           </button>
-          <text v-else class="brand">要过期啦</text>
+          <text v-else class="brand">要过期</text>
       </view>
+    </view>
+
+    <view
+      v-if="pullRefreshState !== 'idle'"
+      class="pull-refresh-indicator"
+      :class="{ failed: pullRefreshState === 'failed' }"
+      :style="refreshIndicatorStyle"
+    >
+      <view v-if="pullRefreshState === 'refreshing'" class="refresh-spinner"></view>
+      <text>{{ pullRefreshText }}</text>
     </view>
 
     <view class="shell" :style="shellStyle">
@@ -213,21 +417,40 @@ function goToItemDetail(item: Item) {
         </view>
 
         <view v-else class="list">
-          <button v-for="item in visibleItems" :key="item.id" class="item-card" @click="goToItemDetail(item)">
-            <image v-if="getItemCover(item)" class="item-thumb" :src="getItemCover(item)!" mode="aspectFill" />
-            <view v-else class="item-thumb item-thumb-fallback">
-              <view class="placeholder-mark">
-                <view class="placeholder-dot"></view>
-                <view class="placeholder-stroke placeholder-stroke-left"></view>
-                <view class="placeholder-stroke placeholder-stroke-right"></view>
+          <view
+            v-for="item in visibleItems"
+            :id="`item-${item.id}`"
+            :key="item.id"
+            class="swipe-row"
+            :class="{ 'swipe-row-open': openSwipeItemId === item.id }"
+          >
+            <button class="swipe-delete" :disabled="deletingItemId === item.id" @click="confirmDeleteItem(item)">
+              {{ deletingItemId === item.id ? '删除中' : '删除' }}
+            </button>
+            <button
+              class="item-card"
+              :style="getSwipeStyle(item)"
+              hover-class="none"
+              @click="handleItemTap(item)"
+              @touchstart="handleItemTouchStart($event, item)"
+              @touchmove="handleItemTouchMove($event, item)"
+              @touchend="handleItemTouchEnd($event, item)"
+            >
+              <image v-if="getItemCover(item)" class="item-thumb" :src="getItemCover(item)!" mode="aspectFill" />
+              <view v-else class="item-thumb item-thumb-fallback">
+                <view class="placeholder-mark">
+                  <view class="placeholder-dot"></view>
+                  <view class="placeholder-stroke placeholder-stroke-left"></view>
+                  <view class="placeholder-stroke placeholder-stroke-right"></view>
+                </view>
               </view>
-            </view>
-            <view class="item-main">
-              <text class="item-name">{{ item.name }}</text>
-              <text class="item-meta">{{ getItemMeta(item) }}</text>
-            </view>
-            <text class="status" :class="getStatusClass(item)">{{ getStatusText(item) }}</text>
-          </button>
+              <view class="item-main">
+                <text class="item-name">{{ item.name }}</text>
+                <text class="item-meta">{{ getItemMeta(item) }}</text>
+              </view>
+              <text class="status" :class="getStatusClass(item)">{{ getStatusText(item) }}</text>
+            </button>
+          </view>
         </view>
       </view>
     </view>
@@ -262,7 +485,6 @@ function goToItemDetail(item: Item) {
     linear-gradient(155deg, rgba(232, 246, 255, 0.98) 0%, rgba(249, 242, 255, 0.96) 44%, rgba(241, 250, 244, 0.98) 100%);
   box-sizing: border-box;
   color: #101418;
-  overflow: hidden;
   position: relative;
 }
 
@@ -285,6 +507,53 @@ function goToItemDetail(item: Item) {
   z-index: 1;
   padding: 0 30rpx 82rpx;
   box-sizing: border-box;
+}
+
+.pull-refresh-indicator {
+  position: fixed;
+  left: 50%;
+  z-index: 11;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+  height: 56rpx;
+  padding: 0 24rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.62);
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.66);
+  box-shadow: 0 14rpx 34rpx rgba(45, 74, 110, 0.1), inset 0 1rpx 0 rgba(255, 255, 255, 0.82);
+  color: rgba(16, 20, 24, 0.52);
+  font-size: 24rpx;
+  transform: translateX(-50%);
+  backdrop-filter: blur(22rpx);
+  -webkit-backdrop-filter: blur(22rpx);
+}
+
+.pull-refresh-indicator.failed {
+  border-color: rgba(229, 72, 63, 0.18);
+  background: rgba(255, 247, 246, 0.82);
+  color: #e5483f;
+}
+
+.refresh-spinner {
+  width: 26rpx;
+  height: 26rpx;
+  border: 3rpx solid rgba(79, 127, 120, 0.18);
+  border-top-color: #4f7f78;
+  border-radius: 50%;
+  animation: refresh-spin 820ms linear infinite;
+  box-sizing: border-box;
+}
+
+@keyframes refresh-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .nav-row {
@@ -646,7 +915,51 @@ function goToItemDetail(item: Item) {
   -webkit-backdrop-filter: blur(30rpx);
 }
 
+.swipe-row {
+  position: relative;
+  overflow: hidden;
+  background: rgba(229, 72, 63, 0.92);
+}
+
+.swipe-delete {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 152rpx;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: rgba(229, 72, 63, 0.92);
+  color: #ffffff;
+  font-size: 26rpx;
+  font-weight: 650;
+  line-height: 1;
+  opacity: 1;
+  pointer-events: none;
+}
+
+.swipe-delete::after {
+  border: 0;
+}
+
+.swipe-row-open .swipe-delete {
+  pointer-events: auto;
+}
+
+.swipe-delete[disabled] {
+  color: rgba(255, 255, 255, 0.72);
+  background: rgba(229, 72, 63, 0.62);
+}
+
 .item-card {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: 20rpx;
@@ -657,12 +970,16 @@ function goToItemDetail(item: Item) {
   border: 0;
   border-bottom: 1rpx solid rgba(255, 255, 255, 0.54);
   border-radius: 0;
-  background: transparent;
+  background: rgba(250, 252, 255, 0.96);
   text-align: left;
+  transform: translate3d(0, 0, 0);
+  transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  will-change: transform;
   box-sizing: border-box;
+  backface-visibility: hidden;
 }
 
-.item-card:last-child {
+.swipe-row:last-child .item-card {
   border-bottom: 0;
 }
 
