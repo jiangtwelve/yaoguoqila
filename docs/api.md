@@ -41,7 +41,8 @@ Item:
   id: string
   familyId: string
   name: string
-  imageUrl: string | null
+  imageUrl: string | null # 兼容/封面冗余，优先使用 imageUrls[0]
+  imageUrls: string[]
   categoryId: string | null
   locationId: string | null
   expiryInputMode: explicit_date | production_date_and_shelf_life
@@ -145,7 +146,8 @@ GET /items/form-options:
 POST /families/{familyId}/items:
   body:
     name: string
-    imageUrl: string | null
+    imageUrl: string | null # 兼容/封面冗余，优先使用 imageUrls[0]
+    imageUrls: string[]
     categoryId: string | null
     locationId: string | null
     expiryInputMode: explicit_date | production_date_and_shelf_life
@@ -183,7 +185,7 @@ DELETE /families/{familyId}/items/{itemId}:
 - `PATCH /families/{familyId}/items/{itemId}` -> 云函数 `item.updateItem`
 - `POST /families/{familyId}/items/{itemId}/consume` -> 云函数 `item.consumeItem`
 - `DELETE /families/{familyId}/items/{itemId}` -> 云函数 `item.deleteItem`
-- 图片上传 -> 微信云存储上传适配层，返回 `imageUrl` 或 cloud file id。
+- 图片上传 -> 微信云存储上传适配层，返回 `imageUrls` 或 cloud file id 列表；首页封面默认取第一张。
 
 ## Open Questions
 - App 端后续是否通过云函数 HTTP 化/网关访问微信云开发资源，或在增长后迁移自建后端。

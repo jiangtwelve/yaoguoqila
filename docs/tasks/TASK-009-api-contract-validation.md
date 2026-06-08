@@ -1,18 +1,18 @@
 ---
-id: TASK-007
+id: TASK-009
 title: 基于已验证前端更新 API contract
 status: Ready
 type: api_design
-dependencies: [TASK-004, TASK-005, TASK-006]
+dependencies: [TASK-004, TASK-005, TASK-006, TASK-007, TASK-008]
 requires_user_acceptance: false
 acceptance_status: not_required
-updated: 2026-06-06
+updated: 2026-06-07
 ---
 
-# TASK-007: 基于已验证前端更新 API contract
+# TASK-009: 基于已验证前端更新 API contract
 
 ## Objective
-在首页、物品表单和物品详情原型验证后，更新 API contract，使其贴合真实页面和 service 数据需求。
+在首页、物品表单、物品详情、多图上传和删除交互验证后，更新 API contract，使其贴合真实页面和 service 数据需求。
 
 ## Scope
 - 对齐 `docs/api.md` 的模型、字段、云函数映射和 mock 示例。

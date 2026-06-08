@@ -1,8 +1,122 @@
 ---
-updated: 2026-06-06
+updated: 2026-06-07
 ---
 
 # Dev Log
+
+## 2026-06-07 TASK-006 Accepted / TASK-007 Started
+- 用户确认 TASK-006 物品详情与处理操作原型可以标记为验收完成。
+- Changes:
+  - `docs/tasks/TASK-006-item-detail-prototype.md` 标记为 Done，`acceptance_status` 标记为 accepted。
+  - `docs/tasks.md` 当前任务切换到 TASK-007。
+  - `docs/tasks/TASK-007-multi-image-upload.md` 标记为 Current，并补充依赖 TASK-006。
+  - `docs/handoff.md` 更新为继续实现物品多图上传与首页封面图。
+- Next:
+  - 扩展数据模型为多图，表单支持多图选择，首页使用第一张图片作为封面。
+
+### TASK-007 Multi Image Prototype Implemented
+- Changes:
+  - `Item` 和 `ItemInput` 新增 `imageUrls: string[]`，保留 `imageUrl` 作为兼容/封面冗余。
+  - 新增/编辑表单图片区改为多图网格，最多选择 9 张图片。
+  - 第一张图片显示「封面」标记，每张图片可单独删除。
+  - 首页列表和详情页优先使用 `imageUrls[0]`，兼容旧 `imageUrl`。
+  - mock fixtures 和 mock repository 已同步多图字段。
+  - `docs/api.md` 草案同步记录多图字段，待 TASK-009 再稳定 API contract。
+- Verification:
+  - `pnpm typecheck` 通过。
+  - `pnpm test` 通过。
+  - `pnpm build:mp-weixin` 通过。
+- Acceptance:
+  - TASK-007 需要用户验收，暂不标记 Done。
+
+## 2026-06-07 TASK-005 Accepted / TASK-006 Started
+- 用户确认 TASK-005 新增/编辑物品表单原型可以标记为验收完成。
+- Changes:
+  - `docs/tasks/TASK-005-item-form-prototype.md` 标记为 Done，`acceptance_status` 标记为 accepted。
+  - `docs/tasks.md` 当前任务切换到 TASK-006。
+  - `docs/tasks/TASK-006-item-detail-prototype.md` 标记为 Current，并补充依赖 TASK-005。
+  - `docs/handoff.md` 更新为继续实现物品详情与处理操作原型。
+- Next:
+  - 实现物品详情页，覆盖状态信息、处理动作、编辑入口和 mock/service 边界。
+
+### TASK-006 Detail Prototype Implemented
+- Changes:
+  - 新增 `src/pages/item-detail/index.vue`，延续「流光毛玻璃 + 石墨青主色」方向。
+  - 首页物品卡片点击进入详情页。
+  - 详情页展示家庭、图片/占位图、名称、状态、到期日、位置和备注。
+  - 支持标记已用完、删除物品和编辑入口。
+  - 扩展 domain/service/repository：新增 `ItemDetail`、`getItemDetail`、`consumeItem`、`deleteItem`。
+  - mock repository 支持详情操作更新本地 mock 数据；cloud adapter 预留云函数调用。
+  - 根据用户反馈移除详情页提醒信息，并取消单独的延期/更新到期日动作；到期日修改归入编辑信息。
+  - 根据用户反馈抽出 `src/components/AppNavBar.vue`，新增页和详情页统一为左侧返回、标题绝对居中、右侧预留微信胶囊操作栏。
+  - 根据 TASK-006 验收反馈补齐编辑页回显和保存修改能力。
+  - 首页改为 `onShow` 刷新，修复标记已用完后返回首页列表未刷新的问题。
+  - 首页统计改用完整当前库存，不再随搜索结果变化；搜索框增加清空按钮。
+  - 根据用户反馈重排详情页：物品图片和到期信息成为主体，位置/备注/录入方式补充信息密度，处理动作改为紧凑工具条。
+  - 根据用户反馈优化无图详情页：有图物品保留大图展示，无图物品改为紧凑身份卡，避免大面积空占位。
+- Verification:
+  - `pnpm typecheck` 通过。
+  - `pnpm test` 通过。
+  - `pnpm build:mp-weixin` 通过。
+- Acceptance:
+  - TASK-006 需要用户验收，暂不标记 Done。
+
+## 2026-06-07 Plan Realignment
+- 用户指出此前要求回到页面设计阶段，但任务状态仍停留在 TASK-005，容易打乱总开发节奏。
+- Decision:
+  - 当前阶段回退到 TASK-004，重新验收家庭首页 Design Anchor。
+  - TASK-005 暂停为 Ready，等 TASK-004 视觉方向确认后再恢复表单验收。
+  - 将新讨论功能插入总计划，不立即打乱当前节奏。
+- Changes:
+  - 更新 `docs/tasks.md`：current_task 改为 TASK-004。
+  - 重新打开 `docs/tasks/TASK-004-family-home-anchor.md`，状态改为 Current，验收改为 pending。
+  - 将 `docs/tasks/TASK-005-item-form-prototype.md` 改为 Ready。
+  - 新增前端功能任务，并在后续讨论后正式重编号为 TASK-007 多图上传、TASK-008 左滑删除、TASK-009 API contract 验证。
+
+### TASK-004 Accepted Again
+- 用户在总计划校准后要求“开始下一步”。
+- 已将 TASK-004 从 Current 标记回 Done，acceptance_status 标记为 accepted。
+- 当前任务推进到 TASK-005：恢复新增/编辑物品表单原型验收。
+
+### Task Queue Renumbering
+- 用户指出仅调整顺序但保留编号会造成困惑，并且 API contract 验证应在会影响接口的前端功能之后。
+- 已正式重编号并修正 Ready 队列：
+  - TASK-006: 物品详情与处理操作原型。
+  - TASK-007: 多图上传与首页封面图。
+  - TASK-008: 首页左滑删除与二次确认。
+  - TASK-009: API contract 验证。
+- TASK-009 dependencies 已更新为 `[TASK-004, TASK-005, TASK-006, TASK-007, TASK-008]`。
+
+### TASK-005 Form Date Refinement
+- 用户提出 TASK-005 验收反馈：
+  - 必填项星号需要使用红色。
+  - 使用「生产日期 + 保质期」时，预计到期若临期或已过期，应使用对应状态色；正常日期才使用主色。
+  - 「生产日期 + 保质期」区域排版需要推倒重做，但保留可回退空间。
+- Changes:
+  - `src/pages/item-form/index.vue` 中必填星号拆为 `.required-mark`，使用红色。
+  - 增加 `calculatedStatusClass`，预计到期结果按 `normal`、`expiring/expires_today`、`expired` 分别使用主色、橙色、红色。
+  - 将「生产日期 + 保质期」改为公式式玻璃卡片布局，保留原字段能力和数据逻辑不变。
+- Follow-up:
+  - 用户反馈左右布局和 `+` 分割直观，但卡片内标题在无边框表单里显乱。
+  - 已移除「生产日期」「保质期」卡片内标题，并将输入内容垂直居中。
+  - 统一该区域提示和值字号，使其和其他表单输入更一致。
+
+
+## 2026-06-07 Design Direction Refresh
+- 用户反馈当前页面风格太克制，不够家用，希望回到页面设计阶段重新设计。
+- Design decision:
+  - 第一版从「极简高级」调整为「温暖家用」，但用户认为仍是在旧设计基础上优化，不够颠覆。
+  - 第二版改为「冰箱门便签板」：贴纸提醒、磁贴统计、双列物品便签、粗描边和多色家用配色。
+  - 第三版根据用户反馈改为「iOS 式普适极简」：适合绝大多数用户，弱化强风格表达，强调系统感、清晰层级和长期使用舒适度。
+  - 第四版根据用户明确要求推倒重做为「流光毛玻璃」：半透明层叠、背景模糊、内高光、漂浮摘要和玻璃表单。
+- Changes:
+  - 更新 `src/pages/home/index.vue`：首页改为毛玻璃 dashboard、玻璃搜索框和半透明列表。
+  - 更新 `src/pages/item-form/index.vue`：新增表单改为玻璃录入台，上传、字段、日期和保存按钮统一使用毛玻璃材质。
+  - 更新 `docs/ui.md`，记录新的待验收 Design Anchor。
+- Verification:
+  - `pnpm typecheck` 通过。
+  - `pnpm test` 通过。
+  - `pnpm build:mp-weixin` 通过。
 
 ## 2026-06-06 TASK-003
 - Goal: 搭建 `uni-app + Vue 3 + TypeScript` 项目骨架，并建立 mock service 与微信云开发 adapter 边界。

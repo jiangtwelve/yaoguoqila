@@ -1,4 +1,4 @@
-import type { CreateFamilyInput, Family, FamilyHome, Item, ItemFormOptions, ItemInput, UpdateProfileInput, User } from '@/domain/models';
+import type { CreateFamilyInput, Family, FamilyHome, Item, ItemDetail, ItemFormOptions, ItemInput, UpdateProfileInput, User } from '@/domain/models';
 import type { HomeRepository } from '@/services/contracts/homeRepository';
 import { callCloudFunction } from './wechatCloudClient';
 
@@ -38,10 +38,38 @@ export class CloudHomeRepository implements HomeRepository {
     });
   }
 
+  async getItemDetail(itemId: string): Promise<ItemDetail> {
+    return callCloudFunction<{ itemId: string }, ItemDetail>({
+      name: 'item.getItemDetail',
+      payload: { itemId }
+    });
+  }
+
   async createItem(familyId: string, input: ItemInput): Promise<Item> {
     return callCloudFunction<{ familyId: string; input: ItemInput }, Item>({
       name: 'item.createItem',
       payload: { familyId, input }
+    });
+  }
+
+  async updateItem(itemId: string, input: ItemInput): Promise<Item> {
+    return callCloudFunction<{ itemId: string; input: ItemInput }, Item>({
+      name: 'item.updateItem',
+      payload: { itemId, input }
+    });
+  }
+
+  async consumeItem(itemId: string): Promise<Item> {
+    return callCloudFunction<{ itemId: string }, Item>({
+      name: 'item.consumeItem',
+      payload: { itemId }
+    });
+  }
+
+  async deleteItem(itemId: string): Promise<void> {
+    return callCloudFunction<{ itemId: string }, void>({
+      name: 'item.deleteItem',
+      payload: { itemId }
     });
   }
 }

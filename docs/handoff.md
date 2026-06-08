@@ -1,9 +1,9 @@
 ---
 status: active
-current_task: TASK-005
+current_task: TASK-007
 next_action: wait_for_user_acceptance
 blocked: false
-updated: 2026-06-06
+updated: 2026-06-07
 ---
 
 # Handoff
@@ -26,17 +26,19 @@ updated: 2026-06-06
 - TASK-003 已完成：已创建 uni-app/Vue/TypeScript 项目骨架、domain models、fixtures、mock service、微信云开发 cloud adapter、首页薄页面和基础验证。
 - TASK-005 已实现：新增 `src/pages/item-form/index.vue`，首页新增按钮可进入表单，service contract 增加 `item.getFormOptions`，表单通过 service 获取家庭、位置、分类。
 - TASK-005 已按用户反馈调整：标题安全区与首页统一；表单顺序为图片、名称、日期、位置、备注；位置自由输入加历史快捷选择；分类和提醒字段从表单移除；图片选择使用 `uni.chooseImage`；日期使用 picker；保质期单位使用轻量下拉选择器；「生产日期 + 保质期」区域已统一字号、颜色和行式布局。
+- TASK-005 已由用户确认验收完成，当前进入 TASK-006。
+- TASK-006 已实现第一版原型：新增物品详情页、首页点击物品进入详情、详情页支持标记已用完、删除和编辑入口；详情页不展示提醒，修改到期日归入编辑信息。编辑页已支持物品回显和保存修改，首页返回会刷新当前库存，统计不再受搜索影响，搜索框已增加清空按钮。
+- TASK-006 已由用户确认验收完成，当前进入 TASK-007。
+- TASK-007 已实现第一版：数据模型新增 `imageUrls`，表单支持多图网格选择/删除，首页和详情页优先展示第一张图片作为封面。
+- 用户在 2026-06-07 反馈页面过于克制、不够家用；第一版调为「温暖家用」后，用户又指出仍像旧设计优化；第二版改成「冰箱门便签板」后，用户认为好看但不适合所有人；第三版改为 iOS 普适极简后，用户认为不好看且不够颠覆。当前 Design Anchor 已推倒重做为「流光毛玻璃」，首页使用 glass dashboard、玻璃搜索框和半透明列表；新增表单使用玻璃录入台风格。
 
 ## 当前任务
-- TASK-005: 实现新增/编辑物品表单原型。
+- TASK-007: 支持物品多图上传与首页封面图。
 
 ## 下一步
-等待用户验收 TASK-005：
-- 检查新增表单整体是否延续首页极简高级风格。
-- 检查图片、名称、日期、位置、备注是否清楚。
-- 检查两种过期日期录入方式和「或」分隔是否容易理解。
-- 检查位置自由输入和历史位置快捷选择是否符合预期。
-- 用户确认前不能标记 TASK-005 Done。
+- 等待用户验收 TASK-007 多图上传与首页封面图。
+- 验收重点：表单是否能选择多张图片，第一张是否作为首页封面，删除第一张后下一张是否自然成为封面。
+- TASK-007 后继续 TASK-008 首页左滑删除与二次确认，最后做 TASK-009 API contract 验证。
 
 ## 关键文件
 - AGENTS.md
@@ -45,7 +47,12 @@ updated: 2026-06-06
 - docs/page-map.md
 - docs/api.md
 - docs/tasks.md
+- docs/tasks/TASK-004-family-home-anchor.md
 - docs/tasks/TASK-005-item-form-prototype.md
+- docs/tasks/TASK-006-item-detail-prototype.md
+- docs/tasks/TASK-007-multi-image-upload.md
+- docs/tasks/TASK-008-swipe-delete.md
+- docs/tasks/TASK-009-api-contract-validation.md
 
 ## 注意事项
 - git status 中已有与本任务无关的 `skills/agent-project-continuity/...` 删除记录，不要回滚或改动，除非用户明确要求。

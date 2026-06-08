@@ -6,7 +6,7 @@ type: design_implementation
 dependencies: [TASK-003]
 requires_user_acceptance: true
 acceptance_status: accepted
-updated: 2026-06-06
+updated: 2026-06-07
 ---
 
 # TASK-004: 实现家庭首页 Design Anchor 静态/Mock 原型
@@ -31,9 +31,13 @@ updated: 2026-06-06
 - 不标记 Done，直到用户亲自验收视觉和交互。
 
 ## Acceptance Criteria
-- 用户确认视觉方向适合产品。已确认：用户反馈“当前首页的效果很不错”。
-- 用户确认核心首页交互符合预期。已确认继续进入新增表单。
+- 用户确认重新设计后的「流光毛玻璃 + 石墨青主色」视觉方向适合产品。已确认：用户要求“开始下一步”。
+- 用户确认首页核心交互符合预期。已确认进入下一阶段。
 - docs/ui.md 更新为已接受的视觉系统。
+
+## Reopen Reason
+- 2026-06-07 用户要求回到页面设计阶段，多次重新探索视觉方向，最终暂定「流光毛玻璃 + 石墨青主色」。
+- 用户确认进入下一步后，TASK-004 已重新标记 Done。
 
 ## Verification
 - `pnpm typecheck`

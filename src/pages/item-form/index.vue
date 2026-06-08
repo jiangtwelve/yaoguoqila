@@ -1,17 +1,20 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { calculateExpiryDate } from '@/domain/expiry';
-import type { ExpiryInputMode, ItemFormOptions, ShelfLifeUnit } from '@/domain/models';
-import { createItem, getItemFormOptions } from '@/services/homeService';
+import { onLoad } from '@dcloudio/uni-app';
+import AppNavBar from '@/components/AppNavBar.vue';
+import { calculateExpiryDate, getItemStatus } from '@/domain/expiry';
+import type { ExpiryInputMode, Item, ItemFormOptions, ItemInput, ShelfLifeUnit } from '@/domain/models';
+import { createItem, getItemDetail, getItemFormOptions, updateItem } from '@/services/homeService';
 import { getNavigationSafeArea } from '@/utils/navigationSafeArea';
 
 const loading = ref(true);
 const saving = ref(false);
 const errorMessage = ref('');
 const options = ref<ItemFormOptions | null>(null);
+const itemId = ref('');
 
 const name = ref('');
-const imageUrl = ref<string | null>(null);
+const imageUrls = ref<string[]>([]);
 const note = ref('');
 const locationName = ref('');
 const expiryInputMode = ref<ExpiryInputMode>('explicit_date');
@@ -24,6 +27,7 @@ const shelfLifeUnits: Array<{ label: string; value: ShelfLifeUnit }> = [
   { label: '月', value: 'month' },
   { label: '年', value: 'year' }
 ];
+const placeholderStyle = 'color: rgba(16, 20, 24, 0.38); font-size: 28rpx; line-height: 1.35;';
 
 const navTopPx = ref(24);
 const navHeightPx = ref(40);
@@ -37,6 +41,8 @@ const navStyle = computed(() => ({
   minHeight: `${navHeightPx.value}px`,
   paddingRight: `${capsuleReservePx.value}px`
 }));
+const isEditing = computed(() => Boolean(itemId.value));
+const pageTitle = computed(() => (isEditing.value ? '编辑物品' : '新增物品'));
 
 const shelfLifeUnitLabel = computed(() => {
   if (shelfLifeUnit.value === 'day') return '天';
@@ -59,10 +65,19 @@ const calculatedExpiresAt = computed(() => {
 
   return calculateExpiryDate(productionDate.value, value, shelfLifeUnit.value);
 });
+const calculatedStatusClass = computed(() => {
+  if (!calculatedExpiresAt.value) return '';
+
+  return `calculated-${getItemStatus(calculatedExpiresAt.value).replace('_', '-')}`;
+});
+
+onLoad((query) => {
+  itemId.value = typeof query?.id === 'string' ? query.id : '';
+});
 
 onMounted(() => {
   updateNavSafeArea();
-  void loadOptions();
+  void loadForm();
 });
 
 function updateNavSafeArea() {
@@ -73,12 +88,16 @@ function updateNavSafeArea() {
   capsuleReservePx.value = safeArea.capsuleReservePx;
 }
 
-async function loadOptions() {
+async function loadForm() {
   loading.value = true;
   errorMessage.value = '';
 
   try {
     options.value = await getItemFormOptions();
+    if (itemId.value) {
+      const detail = await getItemDetail(itemId.value);
+      fillForm(detail.item, detail.locationName);
+    }
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '加载失败';
   } finally {
@@ -86,19 +105,31 @@ async function loadOptions() {
   }
 }
 
+function fillForm(item: Item, fallbackLocationName: string | null) {
+  name.value = item.name;
+  imageUrls.value = item.imageUrls.length ? [...item.imageUrls] : item.imageUrl ? [item.imageUrl] : [];
+  note.value = item.note ?? '';
+  locationName.value = item.locationName ?? fallbackLocationName ?? '';
+  expiryInputMode.value = item.expiryInputMode;
+  expiresAt.value = item.expiresAt;
+  productionDate.value = item.productionDate ?? '';
+  shelfLifeValue.value = item.shelfLifeValue ? String(item.shelfLifeValue) : '';
+  shelfLifeUnit.value = item.shelfLifeUnit ?? 'month';
+}
+
 function chooseImage() {
   uni.chooseImage({
-    count: 1,
+    count: Math.max(1, 9 - imageUrls.value.length),
     sizeType: ['compressed'],
     sourceType: ['album', 'camera'],
     success: (result) => {
-      imageUrl.value = result.tempFilePaths[0] ?? null;
+      imageUrls.value = [...imageUrls.value, ...result.tempFilePaths].slice(0, 9);
     }
   });
 }
 
-function removeImage() {
-  imageUrl.value = null;
+function removeImage(index: number) {
+  imageUrls.value = imageUrls.value.filter((_, currentIndex) => currentIndex !== index);
 }
 
 function setExpiryMode(mode: ExpiryInputMode) {
@@ -135,22 +166,28 @@ async function saveItem() {
   const locationText = locationName.value.trim();
   const matchedLocation = options.value.locations.find((location) => location.name === locationText);
   const finalExpiresAt = expiryInputMode.value === 'explicit_date' ? expiresAt.value : calculatedExpiresAt.value;
+  const input: ItemInput = {
+    name: name.value.trim(),
+    imageUrl: imageUrls.value[0] ?? null,
+    imageUrls: imageUrls.value,
+    categoryId: null,
+    locationId: matchedLocation?.id ?? null,
+    locationName: locationText || null,
+    expiryInputMode: expiryInputMode.value,
+    productionDate: expiryInputMode.value === 'production_date_and_shelf_life' ? productionDate.value : null,
+    shelfLifeValue: expiryInputMode.value === 'production_date_and_shelf_life' ? Number(shelfLifeValue.value) : null,
+    shelfLifeUnit: expiryInputMode.value === 'production_date_and_shelf_life' ? shelfLifeUnit.value : null,
+    expiresAt: finalExpiresAt,
+    reminderDaysBefore: [1, 3],
+    note: note.value.trim() || null
+  };
 
   try {
-    await createItem(options.value.family.id, {
-      name: name.value.trim(),
-      imageUrl: imageUrl.value,
-      categoryId: null,
-      locationId: matchedLocation?.id ?? null,
-      locationName: locationText || null,
-      expiryInputMode: expiryInputMode.value,
-      productionDate: expiryInputMode.value === 'production_date_and_shelf_life' ? productionDate.value : null,
-      shelfLifeValue: expiryInputMode.value === 'production_date_and_shelf_life' ? Number(shelfLifeValue.value) : null,
-      shelfLifeUnit: expiryInputMode.value === 'production_date_and_shelf_life' ? shelfLifeUnit.value : null,
-      expiresAt: finalExpiresAt,
-      reminderDaysBefore: [1, 3],
-      note: note.value.trim() || null
-    });
+    if (itemId.value) {
+      await updateItem(itemId.value, input);
+    } else {
+      await createItem(options.value.family.id, input);
+    }
 
     uni.navigateBack();
   } catch (error) {
@@ -167,10 +204,7 @@ function goBack() {
 
 <template>
   <view class="page">
-    <view class="nav-row" :style="navStyle">
-      <button class="back-button" @click="goBack">‹</button>
-      <text class="title">新增物品</text>
-    </view>
+    <AppNavBar :title="pageTitle" :nav-style="navStyle" show-back @back="goBack" />
 
     <view class="shell" :style="shellStyle">
       <view v-if="loading" class="quiet-state">
@@ -185,24 +219,27 @@ function goBack() {
 
       <view v-else class="form">
         <view class="photo-field">
-          <button class="photo-picker" @click="chooseImage">
-            <image v-if="imageUrl" class="photo-preview" :src="imageUrl" mode="aspectFill" />
-            <view v-else class="photo-empty">
-              <text class="photo-plus">＋</text>
-              <text class="photo-copy">上传图片</text>
+          <view class="photo-grid">
+            <view v-for="(url, index) in imageUrls" :key="url" class="photo-tile">
+              <image class="photo-preview" :src="url" mode="aspectFill" />
+              <text v-if="index === 0" class="cover-badge">封面</text>
+              <button class="remove-photo" @click="removeImage(index)">×</button>
             </view>
-          </button>
-          <button v-if="imageUrl" class="remove-photo" @click="removeImage">移除</button>
+            <button v-if="imageUrls.length < 9" class="photo-picker" @click="chooseImage">
+              <text class="photo-plus">＋</text>
+              <text class="photo-copy">{{ imageUrls.length ? '继续添加' : '上传图片' }}</text>
+            </button>
+          </view>
         </view>
 
         <label class="field">
-          <text class="label">名称 *</text>
-          <input v-model="name" class="input" placeholder="例如 鲜牛奶" placeholder-class="placeholder" />
+          <text class="label">名称 <text class="required-mark">*</text></text>
+          <input v-model="name" class="input" placeholder="例如 鲜牛奶" :placeholder-style="placeholderStyle" />
         </label>
 
         <view class="date-panel">
           <view class="date-head">
-            <text class="label">日期 *</text>
+            <text class="label">日期 <text class="required-mark">*</text></text>
             <text class="hint">任选一种</text>
           </view>
 
@@ -222,21 +259,21 @@ function goBack() {
 
           <view class="date-mode" :class="{ active: expiryInputMode === 'production_date_and_shelf_life' }" @click="setExpiryMode('production_date_and_shelf_life')">
             <text class="mode-title">生产日期 + 保质期</text>
-            <view class="date-fields">
+            <view class="formula-grid">
               <picker mode="date" :value="productionDate" @change="handleProductionDateChange">
-                <view class="sub-field">
-                  <text class="sub-label">生产日期</text>
-                  <view class="sub-value" :class="{ empty: !productionDate }">
+                <view class="formula-card">
+                  <view class="formula-value" :class="{ empty: !productionDate }">
                     <text>{{ productionDate || '请选择' }}</text>
                     <text class="picker-arrow">⌄</text>
                   </view>
                 </view>
               </picker>
 
-              <view class="sub-field">
-                <text class="sub-label">保质期</text>
-                <view class="shelf-control">
-                  <input v-model="shelfLifeValue" class="shelf-input" type="number" placeholder="填写" placeholder-class="placeholder" />
+              <view class="formula-plus">+</view>
+
+              <view class="formula-card">
+                <view class="formula-value shelf-control">
+                  <input v-model="shelfLifeValue" class="shelf-input" type="number" placeholder="填写" :placeholder-style="placeholderStyle" />
                   <picker mode="selector" :range="shelfLifeUnits" range-key="label" @change="handleShelfLifeUnitChange">
                     <view class="unit-select">
                       <text>{{ shelfLifeUnitLabel }}</text>
@@ -246,13 +283,16 @@ function goBack() {
                 </view>
               </view>
             </view>
-            <text v-if="calculatedExpiresAt" class="calculated">预计到期 {{ calculatedExpiresAt }}</text>
+            <view v-if="calculatedExpiresAt" class="calculated" :class="calculatedStatusClass">
+              <text class="calculated-label">预计到期</text>
+              <text class="calculated-date">{{ calculatedExpiresAt }}</text>
+            </view>
           </view>
         </view>
 
         <label class="field">
           <text class="label">位置</text>
-          <input v-model="locationName" class="input" placeholder="例如 冰箱冷藏" placeholder-class="placeholder" />
+          <input v-model="locationName" class="input" placeholder="例如 冰箱冷藏" :placeholder-style="placeholderStyle" />
           <view v-if="options.locations.length" class="history-row">
             <button
               v-for="location in options.locations"
@@ -268,13 +308,13 @@ function goBack() {
 
         <label class="field">
           <text class="label">备注</text>
-          <textarea v-model="note" class="textarea" placeholder="可选" placeholder-class="placeholder" />
+          <textarea v-model="note" class="textarea" placeholder="可选" :placeholder-style="placeholderStyle" />
         </label>
 
         <text v-if="errorMessage" class="error">{{ errorMessage }}</text>
 
         <button class="save-button" :class="{ disabled: !canSave || saving }" :disabled="!canSave || saving" @click="saveItem">
-          {{ saving ? '保存中' : '保存' }}
+          {{ saving ? '保存中' : isEditing ? '保存修改' : '保存' }}
         </button>
       </view>
     </view>
@@ -284,34 +324,34 @@ function goBack() {
 <style scoped lang="scss">
 .page {
   min-height: 100vh;
-  background: #f4f6f1;
-  color: #151713;
+  background:
+    linear-gradient(155deg, rgba(232, 246, 255, 0.98) 0%, rgba(249, 242, 255, 0.96) 44%, rgba(241, 250, 244, 0.98) 100%);
+  color: #101418;
+  overflow: hidden;
+  position: relative;
+}
+
+.page::before {
+  content: "";
+  position: fixed;
+  inset: -18% -10% auto;
+  height: 58vh;
+  background:
+    linear-gradient(125deg, rgba(79, 127, 120, 0.24), transparent 42%),
+    linear-gradient(245deg, rgba(125, 164, 157, 0.18), transparent 48%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.78), transparent 70%);
+  filter: blur(18rpx);
+  pointer-events: none;
 }
 
 .shell {
   min-height: 100vh;
-  padding: 0 36rpx 56rpx;
+  position: relative;
+  z-index: 1;
+  padding: 0 30rpx 82rpx;
   box-sizing: border-box;
 }
 
-.nav-row {
-  position: fixed;
-  left: 36rpx;
-  right: 0;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  gap: 18rpx;
-  box-sizing: border-box;
-  pointer-events: none;
-}
-
-.back-button,
-.title {
-  pointer-events: auto;
-}
-
-.back-button,
 .choice,
 .date-mode,
 .save-button,
@@ -320,7 +360,6 @@ function goBack() {
   margin: 0;
 }
 
-.back-button::after,
 .choice::after,
 .date-mode::after,
 .save-button::after,
@@ -329,42 +368,48 @@ function goBack() {
   border: 0;
 }
 
-.back-button {
-  width: 58rpx;
-  height: 58rpx;
-  padding: 0;
-  border: 1rpx solid rgba(21, 23, 19, 0.16);
-  border-radius: 50%;
-  background: transparent;
-  color: #151713;
-  font-size: 42rpx;
-  line-height: 52rpx;
-}
-
-.title,
 .state-title {
-  font-family: "Songti SC", "STSong", serif;
-  font-size: 42rpx;
-  font-weight: 600;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", sans-serif;
+  color: #101418;
+  font-size: 38rpx;
+  font-weight: 760;
   line-height: 1.15;
 }
 
 .form {
-  margin-top: 28rpx;
+  margin-top: 24rpx;
 }
 
 .photo-field {
-  padding: 6rpx 0 34rpx;
-  border-bottom: 1rpx solid rgba(21, 23, 19, 0.1);
+  padding: 24rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.62);
+  border-radius: 36rpx;
+  background: rgba(255, 255, 255, 0.34);
+  box-shadow: 0 26rpx 58rpx rgba(45, 74, 110, 0.11), inset 0 1rpx 0 rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(30rpx);
+  -webkit-backdrop-filter: blur(30rpx);
+  box-sizing: border-box;
 }
 
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14rpx;
+}
+
+.photo-tile,
 .photo-picker {
-  width: 188rpx;
-  height: 188rpx;
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
   padding: 0;
-  border: 1rpx solid rgba(21, 23, 19, 0.16);
-  border-radius: 8rpx;
-  background: transparent;
+  border: 0;
+  border-radius: 22rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.58);
+  background: rgba(255, 255, 255, 0.34);
+  box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(20rpx);
+  -webkit-backdrop-filter: blur(20rpx);
   overflow: hidden;
 }
 
@@ -373,18 +418,17 @@ function goBack() {
   height: 100%;
 }
 
-.photo-empty {
+.photo-picker {
   display: flex;
-  height: 100%;
   align-items: center;
   justify-content: center;
   flex-direction: column;
   gap: 8rpx;
-  color: #687164;
+  color: rgba(16, 20, 24, 0.48);
 }
 
 .photo-plus {
-  color: #151713;
+  color: #4f7f78;
   font-size: 42rpx;
   line-height: 1;
 }
@@ -394,26 +438,65 @@ function goBack() {
   font-size: 24rpx;
 }
 
+.cover-badge {
+  position: absolute;
+  left: 10rpx;
+  bottom: 10rpx;
+  height: 34rpx;
+  padding: 0 12rpx;
+  border-radius: 99rpx;
+  background: rgba(16, 20, 24, 0.52);
+  color: #fff;
+  font-size: 20rpx;
+  line-height: 34rpx;
+  backdrop-filter: blur(14rpx);
+  -webkit-backdrop-filter: blur(14rpx);
+}
+
 .remove-photo {
-  display: block;
-  margin-top: 18rpx;
+  position: absolute;
+  top: 8rpx;
+  right: 8rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36rpx;
+  height: 36rpx;
+  margin: 0;
   padding: 0;
-  background: transparent;
-  color: #8d2c22;
-  line-height: 1.2;
+  border-radius: 50%;
+  background: rgba(16, 20, 24, 0.48);
+  color: #fff;
+  font-size: 28rpx;
+  line-height: 36rpx;
+  backdrop-filter: blur(14rpx);
+  -webkit-backdrop-filter: blur(14rpx);
 }
 
 .field {
   display: block;
-  padding: 30rpx 0;
-  border-bottom: 1rpx solid rgba(21, 23, 19, 0.1);
+  margin-top: 18rpx;
+  padding: 24rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.62);
+  border-radius: 32rpx;
+  background: rgba(255, 255, 255, 0.34);
+  box-shadow: 0 20rpx 46rpx rgba(45, 74, 110, 0.09), inset 0 1rpx 0 rgba(255, 255, 255, 0.76);
+  backdrop-filter: blur(28rpx);
+  -webkit-backdrop-filter: blur(28rpx);
+  box-sizing: border-box;
 }
 
 .label {
   display: block;
   margin-bottom: 18rpx;
-  color: #596154;
+  color: rgba(16, 20, 24, 0.46);
   font-size: 24rpx;
+  font-weight: 500;
+}
+
+.required-mark {
+  color: #e5483f;
+  font-weight: 700;
 }
 
 .input,
@@ -421,7 +504,7 @@ function goBack() {
   width: 100%;
   min-height: 72rpx;
   padding: 0;
-  color: #151713;
+  color: #101418;
   font-size: 32rpx;
   line-height: 1.35;
 }
@@ -430,37 +513,41 @@ function goBack() {
   min-height: 132rpx;
 }
 
-.placeholder {
-  color: #8a9185;
-}
-
 .history-row {
   display: flex;
   flex-wrap: wrap;
   gap: 14rpx;
-  margin-top: 18rpx;
+  margin-top: 20rpx;
 }
 
 .choice {
   height: 58rpx;
   padding: 0 22rpx;
-  border: 1rpx solid rgba(21, 23, 19, 0.16);
-  border-radius: 8rpx;
-  background: transparent;
-  color: #596154;
+  border: 0;
+  border-radius: 999rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.58);
+  background: rgba(255, 255, 255, 0.34);
+  color: rgba(16, 20, 24, 0.58);
   font-size: 24rpx;
-  line-height: 56rpx;
+  line-height: 58rpx;
 }
 
 .selected,
 .active {
-  border-color: #151713;
-  color: #151713;
+  background: rgba(229, 241, 255, 0.68);
+  color: #4f7f78;
 }
 
 .date-panel {
-  padding: 34rpx 0;
-  border-bottom: 1rpx solid rgba(21, 23, 19, 0.1);
+  margin-top: 18rpx;
+  padding: 24rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.62);
+  border-radius: 32rpx;
+  background: rgba(255, 255, 255, 0.34);
+  box-shadow: 0 20rpx 46rpx rgba(45, 74, 110, 0.09), inset 0 1rpx 0 rgba(255, 255, 255, 0.76);
+  backdrop-filter: blur(28rpx);
+  -webkit-backdrop-filter: blur(28rpx);
+  box-sizing: border-box;
 }
 
 .date-head {
@@ -471,16 +558,20 @@ function goBack() {
 }
 
 .hint {
-  color: #8a9185;
+  color: rgba(16, 20, 24, 0.38);
   font-size: 22rpx;
 }
 
 .date-mode {
   width: 100%;
-  padding: 26rpx 24rpx;
-  border: 1rpx solid rgba(21, 23, 19, 0.14);
-  border-radius: 8rpx;
-  background: transparent;
+  padding: 24rpx;
+  border: 0;
+  border-radius: 18rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.56);
+  background: rgba(255, 255, 255, 0.28);
+  box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(20rpx);
+  -webkit-backdrop-filter: blur(20rpx);
   text-align: left;
   box-sizing: border-box;
 }
@@ -488,8 +579,9 @@ function goBack() {
 .mode-title {
   display: block;
   margin-bottom: 12rpx;
-  color: #151713;
+  color: #101418;
   font-size: 28rpx;
+  font-weight: 600;
 }
 
 .picker-value {
@@ -497,16 +589,16 @@ function goBack() {
   align-items: center;
   justify-content: space-between;
   min-height: 58rpx;
-  color: #151713;
+  color: #101418;
   font-size: 28rpx;
 }
 
 .picker-value.empty {
-  color: #8a9185;
+  color: rgba(16, 20, 24, 0.38);
 }
 
 .picker-arrow {
-  color: #8a9185;
+  color: rgba(16, 20, 24, 0.38);
   font-size: 26rpx;
 }
 
@@ -515,58 +607,68 @@ function goBack() {
   align-items: center;
   justify-content: center;
   height: 62rpx;
-  color: #8a9185;
+  color: rgba(16, 20, 24, 0.38);
   font-size: 24rpx;
 }
 
-.date-fields {
+.formula-grid {
   display: grid;
-  gap: 18rpx;
-  margin-top: 4rpx;
+  grid-template-columns: minmax(0, 1fr) 42rpx minmax(0, 1fr);
+  align-items: stretch;
+  gap: 12rpx;
+  margin-top: 14rpx;
 }
 
-.sub-field {
+.formula-card {
+  display: flex;
+  min-height: 112rpx;
+  padding: 20rpx;
+  align-items: center;
+  border: 1rpx solid rgba(255, 255, 255, 0.58);
+  border-radius: 22rpx;
+  background: rgba(255, 255, 255, 0.24);
+  box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.7);
+  box-sizing: border-box;
+}
+
+.formula-value {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 24rpx;
-  min-height: 72rpx;
-  border-bottom: 1rpx solid rgba(21, 23, 19, 0.1);
-}
-
-.sub-field:last-child {
-  border-bottom: 0;
-}
-
-.sub-label {
-  flex: 0 0 auto;
-  color: #596154;
-  font-size: 26rpx;
-}
-
-.sub-value,
-.shelf-control {
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  align-items: center;
-  justify-content: flex-end;
   gap: 12rpx;
-  color: #151713;
-  font-size: 30rpx;
+  width: 100%;
+  min-width: 0;
+  min-height: 64rpx;
+  color: #101418;
+  font-size: 32rpx;
+  line-height: 1.35;
 }
 
-.sub-value.empty {
-  color: #8a9185;
+.formula-value.empty {
+  color: rgba(16, 20, 24, 0.38);
+  font-size: 28rpx;
+}
+
+.formula-plus {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(16, 20, 24, 0.42);
+  font-size: 34rpx;
+  font-weight: 500;
+}
+
+.shelf-control {
+  justify-content: flex-end;
 }
 
 .shelf-input {
-  width: 160rpx;
+  width: 104rpx;
   min-width: 0;
   min-height: 68rpx;
   padding: 0;
-  color: #151713;
-  font-size: 30rpx;
+  color: #101418;
+  font-size: 32rpx;
   line-height: 1.35;
   text-align: right;
 }
@@ -577,32 +679,69 @@ function goBack() {
   justify-content: flex-end;
   gap: 6rpx;
   flex: 0 0 auto;
-  min-width: 62rpx;
-  height: 68rpx;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: #151713;
-  font-size: 30rpx;
-  line-height: 68rpx;
+  min-width: 70rpx;
+  height: 54rpx;
+  padding: 0 12rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.56);
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.28);
+  color: #101418;
+  font-size: 28rpx;
+  line-height: 54rpx;
+  box-sizing: border-box;
 }
 
 .calculated {
-  display: block;
-  margin-top: 16rpx;
-  color: #8c5d4a;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  min-height: 66rpx;
+  margin-top: 18rpx;
+  padding: 0 20rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.58);
+  border-radius: 20rpx;
+  background: rgba(255, 255, 255, 0.24);
+  box-sizing: border-box;
+  color: #4f7f78;
   font-size: 24rpx;
+}
+
+.calculated-label {
+  color: rgba(16, 20, 24, 0.48);
+}
+
+.calculated-date {
+  font-size: 28rpx;
+  font-weight: 700;
+}
+
+.calculated-normal {
+  color: #4f7f78;
+}
+
+.calculated-expiring,
+.calculated-expires-today {
+  color: #ff9500;
+}
+
+.calculated-expired {
+  color: #e5483f;
 }
 
 .save-button {
   width: 100%;
   height: 88rpx;
   margin-top: 42rpx;
-  border-radius: 8rpx;
-  background: #151713;
-  color: #f8faf4;
+  border-radius: 999rpx;
+  background: rgba(16, 20, 24, 0.82);
+  color: #ffffff;
   font-size: 30rpx;
+  font-weight: 600;
   line-height: 88rpx;
+  box-shadow: 0 20rpx 46rpx rgba(30, 70, 110, 0.24);
+  backdrop-filter: blur(24rpx);
+  -webkit-backdrop-filter: blur(24rpx);
 }
 
 .disabled {
@@ -621,13 +760,13 @@ function goBack() {
 
 .state-copy,
 .error {
-  color: #687164;
+  color: rgba(16, 20, 24, 0.58);
   font-size: 28rpx;
 }
 
 .error {
   display: block;
   margin-top: 24rpx;
-  color: #8d2c22;
+  color: #e5483f;
 }
 </style>

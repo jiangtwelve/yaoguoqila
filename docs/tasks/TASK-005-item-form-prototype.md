@@ -1,12 +1,12 @@
 ---
 id: TASK-005
 title: 实现新增/编辑物品表单原型
-status: Current
+status: Done
 type: design_implementation
 dependencies: [TASK-004]
 requires_user_acceptance: true
-acceptance_status: pending
-updated: 2026-06-06
+acceptance_status: accepted
+updated: 2026-06-07
 ---
 
 # TASK-005: 实现新增/编辑物品表单原型
@@ -25,6 +25,7 @@ updated: 2026-06-06
 ## Non-Scope
 - 不接真实云函数。
 - 不做 OCR 或条码识别。
+- 不在用户验收表单交互前标记 Done。
 
 ## Acceptance Criteria
 - 用户确认表单信息结构清楚，不显得臃肿。

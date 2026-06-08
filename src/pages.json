@@ -13,6 +13,13 @@
         "navigationStyle": "custom",
         "navigationBarTitleText": "新增物品"
       }
+    },
+    {
+      "path": "pages/item-detail/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "物品详情"
+      }
     }
   ],
   "globalStyle": {

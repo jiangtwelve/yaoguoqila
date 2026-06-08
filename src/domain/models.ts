@@ -50,6 +50,7 @@ export interface Item {
   familyId: string;
   name: string;
   imageUrl: string | null;
+  imageUrls: string[];
   categoryId: string | null;
   locationId: string | null;
   locationName?: string | null;
@@ -90,6 +91,12 @@ export interface ItemFormOptions {
   locations: Location[];
 }
 
+export interface ItemDetail {
+  item: Item;
+  family: Family | null;
+  locationName: string | null;
+}
+
 export interface CreateFamilyInput {
   name: string;
 }
@@ -101,6 +108,7 @@ export interface UpdateProfileInput {
 export interface ItemInput {
   name: string;
   imageUrl: string | null;
+  imageUrls: string[];
   categoryId: string | null;
   locationId: string | null;
   locationName?: string | null;

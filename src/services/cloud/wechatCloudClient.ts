@@ -5,6 +5,7 @@ type CloudFunctionName =
   | 'home.getFamilyHome'
   | 'item.getFormOptions'
   | 'item.listItems'
+  | 'item.getItemDetail'
   | 'item.createItem'
   | 'item.updateItem'
   | 'item.consumeItem'

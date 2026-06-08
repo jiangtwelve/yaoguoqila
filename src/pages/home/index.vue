@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import { onShow } from '@dcloudio/uni-app';
 import type { FamilyHome, Item } from '@/domain/models';
 import { daysUntil } from '@/domain/expiry';
 import { getFamilyHome, searchItems } from '@/services/homeService';
@@ -17,13 +18,15 @@ const visibleItems = ref<Item[]>([]);
 
 const hasFamily = computed(() => Boolean(home.value?.currentFamily));
 const needsProfileName = computed(() => Boolean(home.value && !home.value.user.hasSetDisplayName));
-const expiredCount = computed(() => visibleItems.value.filter((item) => item.status === 'expired').length);
-const expiringCount = computed(() => visibleItems.value.filter((item) => ['expires_today', 'expiring'].includes(item.status)).length);
+const inventoryItems = computed(() => home.value?.items ?? []);
+const expiredCount = computed(() => inventoryItems.value.filter((item) => item.status === 'expired').length);
+const expiringCount = computed(() => inventoryItems.value.filter((item) => ['expires_today', 'expiring'].includes(item.status)).length);
 const attentionCount = computed(() => expiredCount.value + expiringCount.value);
 const heroMode = computed(() => (expiredCount.value > 0 ? 'expired' : 'urgent'));
-const heroTitle = computed(() => (attentionCount.value > 0 ? '需要处理' : '状态良好'));
+const heroTitle = computed(() => (attentionCount.value > 0 ? '今天要看' : '库存清透'));
 const heroNumber = computed(() => attentionCount.value);
-const heroCopy = computed(() => (attentionCount.value > 0 ? '件物品需要留意' : '暂无临期或过期物品'));
+const heroCopy = computed(() => (attentionCount.value > 0 ? '有物品正在靠近过期时间' : '暂无临期和过期物品'));
+const itemCountText = computed(() => `共 ${inventoryItems.value.length} 件物品`);
 const shellStyle = computed(() => ({
   paddingTop: `${navTopPx.value + navHeightPx.value + 18}px`
 }));
@@ -35,6 +38,9 @@ const navStyle = computed(() => ({
 
 onMounted(() => {
   updateTopSafePadding();
+});
+
+onShow(() => {
   void loadHome();
 });
 
@@ -52,7 +58,12 @@ async function loadHome() {
 
   try {
     home.value = await getFamilyHome();
-    visibleItems.value = home.value.items;
+    if (!home.value.currentFamily) {
+      visibleItems.value = [];
+      return;
+    }
+
+    visibleItems.value = search.value.trim() ? await searchItems(home.value.currentFamily.id, search.value) : home.value.items;
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '加载失败';
   } finally {
@@ -75,6 +86,10 @@ function handleSearchInput(event: InputEvent) {
   const target = event.target as HTMLInputElement | null;
 
   void handleSearch(target?.value ?? '');
+}
+
+function clearSearch() {
+  void handleSearch('');
 }
 
 function getStatusText(item: Item): string {
@@ -104,9 +119,19 @@ function getItemMeta(item: Item): string {
   return locationName ? `${locationName} · ${expiryText}` : expiryText;
 }
 
+function getItemCover(item: Item): string | null {
+  return item.imageUrls[0] ?? item.imageUrl ?? null;
+}
+
 function goToNewItem() {
   void uni.navigateTo({
     url: '/pages/item-form/index'
+  });
+}
+
+function goToItemDetail(item: Item) {
+  void uni.navigateTo({
+    url: `/pages/item-detail/index?id=${item.id}`
   });
 }
 </script>
@@ -145,16 +170,25 @@ function goToNewItem() {
       </view>
 
       <view v-else>
-        <view class="hero" :class="`hero-${heroMode}`">
-          <text class="hero-kicker">{{ heroTitle }}</text>
-          <text class="hero-number">{{ heroNumber }}</text>
-          <text class="hero-copy">{{ heroCopy }}</text>
-          <view v-if="attentionCount > 0" class="hero-breakdown">
-            <view class="breakdown-item breakdown-expired">
+        <view class="glass-dashboard" :class="`hero-${heroMode}`">
+          <view class="glass-header">
+            <view class="summary-copy">
+              <text class="hero-kicker">{{ itemCountText }}</text>
+              <text class="hero-title">{{ heroTitle }}</text>
+              <text class="hero-copy">{{ heroCopy }}</text>
+            </view>
+            <view class="hero-meter">
+              <text class="hero-number">{{ heroNumber }}</text>
+              <text class="hero-unit">件</text>
+            </view>
+          </view>
+
+          <view class="glass-metrics">
+            <view class="metric-card breakdown-expired">
               <text class="breakdown-value">{{ expiredCount }}</text>
               <text class="breakdown-label">已过期</text>
             </view>
-            <view class="breakdown-item breakdown-expiring">
+            <view class="metric-card breakdown-expiring">
               <text class="breakdown-value">{{ expiringCount }}</text>
               <text class="breakdown-label">临期</text>
             </view>
@@ -170,6 +204,7 @@ function goToNewItem() {
             placeholder-class="search-placeholder"
             @input="handleSearchInput"
           />
+          <button v-if="search" class="search-clear" aria-label="清空查询" @click="clearSearch">×</button>
         </view>
 
         <view v-if="visibleItems.length === 0" class="quiet-state compact">
@@ -178,7 +213,15 @@ function goToNewItem() {
         </view>
 
         <view v-else class="list">
-          <button v-for="item in visibleItems" :key="item.id" class="item-row">
+          <button v-for="item in visibleItems" :key="item.id" class="item-card" @click="goToItemDetail(item)">
+            <image v-if="getItemCover(item)" class="item-thumb" :src="getItemCover(item)!" mode="aspectFill" />
+            <view v-else class="item-thumb item-thumb-fallback">
+              <view class="placeholder-mark">
+                <view class="placeholder-dot"></view>
+                <view class="placeholder-stroke placeholder-stroke-left"></view>
+                <view class="placeholder-stroke placeholder-stroke-right"></view>
+              </view>
+            </view>
             <view class="item-main">
               <text class="item-name">{{ item.name }}</text>
               <text class="item-meta">{{ getItemMeta(item) }}</text>
@@ -215,20 +258,38 @@ function goToNewItem() {
 <style scoped lang="scss">
 .page {
   min-height: 100vh;
-  background: #f4f6f1;
+  background:
+    linear-gradient(155deg, rgba(232, 246, 255, 0.98) 0%, rgba(249, 242, 255, 0.96) 44%, rgba(241, 250, 244, 0.98) 100%);
   box-sizing: border-box;
-  color: #151713;
+  color: #101418;
+  overflow: hidden;
+  position: relative;
+}
+
+.page::before {
+  content: "";
+  position: fixed;
+  inset: -18% -10% auto;
+  height: 58vh;
+  background:
+    linear-gradient(125deg, rgba(79, 127, 120, 0.24), transparent 42%),
+    linear-gradient(245deg, rgba(125, 164, 157, 0.18), transparent 48%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.78), transparent 70%);
+  filter: blur(18rpx);
+  pointer-events: none;
 }
 
 .shell {
   min-height: 100vh;
-  padding: 0 36rpx 56rpx;
+  position: relative;
+  z-index: 1;
+  padding: 0 30rpx 82rpx;
   box-sizing: border-box;
 }
 
 .nav-row {
   position: fixed;
-  left: 36rpx;
+  left: 30rpx;
   right: 0;
   z-index: 10;
   display: flex;
@@ -251,10 +312,10 @@ function goToNewItem() {
   padding: 0;
   border: 0;
   background: transparent;
-  color: #151713;
-  font-family: "Songti SC", "STSong", serif;
-  font-size: 42rpx;
-  font-weight: 600;
+  color: #101418;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", sans-serif;
+  font-size: 38rpx;
+  font-weight: 760;
   line-height: 1.12;
   letter-spacing: 0;
   max-width: 100%;
@@ -264,14 +325,14 @@ function goToNewItem() {
 .add-button::after,
 .primary-action::after,
 .secondary-action::after,
-.item-row::after {
+.item-card::after {
   border: 0;
 }
 
 .chevron {
-  color: #7c8378;
-  font-family: serif;
-  font-size: 34rpx;
+  color: rgba(16, 20, 24, 0.45);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+  font-size: 30rpx;
 }
 
 .add-button {
@@ -279,12 +340,12 @@ function goToNewItem() {
   width: 72rpx;
   height: 72rpx;
   padding: 0;
-  border: 1rpx solid #1d211b;
+  border: 0;
   border-radius: 50%;
-  background: #151713;
-  color: #f8faf4;
-  font-size: 38rpx;
-  line-height: 68rpx;
+  background: rgba(16, 20, 24, 0.82);
+  color: #ffffff;
+  font-size: 42rpx;
+  line-height: 70rpx;
 }
 
 .floating-add {
@@ -294,73 +355,154 @@ function goToNewItem() {
   z-index: 12;
   width: 92rpx;
   height: 92rpx;
-  box-shadow: 0 18rpx 42rpx rgba(21, 23, 19, 0.18);
+  box-shadow: 0 20rpx 46rpx rgba(30, 70, 110, 0.28);
+  backdrop-filter: blur(24rpx);
+  -webkit-backdrop-filter: blur(24rpx);
   font-size: 46rpx;
   line-height: 88rpx;
 }
 
-.hero {
-  margin-top: 28rpx;
-  padding-bottom: 46rpx;
-  border-bottom: 1rpx solid rgba(21, 23, 19, 0.14);
+.glass-dashboard {
+  position: relative;
+  margin-top: 18rpx;
+  padding: 34rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.62);
+  border-radius: 38rpx;
+  background: rgba(255, 255, 255, 0.34);
+  box-shadow: 0 30rpx 70rpx rgba(45, 74, 110, 0.14), inset 0 1rpx 0 rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(34rpx);
+  -webkit-backdrop-filter: blur(34rpx);
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.glass-dashboard::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, rgba(255, 255, 255, 0.62), transparent 46%, rgba(255, 255, 255, 0.28));
+  pointer-events: none;
+}
+
+.glass-header {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24rpx;
+}
+
+.summary-copy {
+  min-width: 0;
 }
 
 .hero-kicker {
   display: block;
-  color: #596154;
+  color: rgba(16, 20, 24, 0.46);
   font-size: 24rpx;
+  font-weight: 500;
+}
+
+.hero-title {
+  display: block;
+  margin-top: 12rpx;
+  color: #101418;
+  font-size: 54rpx;
+  font-weight: 780;
+  line-height: 1.12;
 }
 
 .hero-number {
-  display: block;
-  margin-top: 16rpx;
-  font-family: "Songti SC", "STSong", serif;
-  font-size: 132rpx;
-  font-weight: 500;
-  line-height: 0.9;
+  color: #101418;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
+  font-size: 78rpx;
+  font-weight: 700;
+  line-height: 1;
   letter-spacing: 0;
 }
 
 .hero-copy {
   display: block;
-  margin-top: 22rpx;
-  color: #596154;
+  margin-top: 12rpx;
+  color: rgba(16, 20, 24, 0.58);
   font-size: 26rpx;
+  line-height: 1.45;
 }
 
-.hero-expired .hero-kicker,
-.hero-expired .hero-number {
-  color: #8d2c22;
-}
-
-.hero-breakdown {
+.hero-meter {
   display: flex;
-  gap: 44rpx;
-  margin-top: 34rpx;
-}
-
-.breakdown-item {
-  display: flex;
+  flex: 0 0 auto;
   align-items: baseline;
-  gap: 12rpx;
+  gap: 6rpx;
+  padding: 16rpx 20rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.64);
+  border-radius: 28rpx;
+  background: rgba(255, 255, 255, 0.34);
+  box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(22rpx);
+  -webkit-backdrop-filter: blur(22rpx);
 }
 
-.breakdown-value {
-  font-family: "Songti SC", "STSong", serif;
-  font-size: 42rpx;
-  line-height: 1;
-}
-
-.breakdown-label {
+.hero-unit {
+  color: rgba(16, 20, 24, 0.46);
   font-size: 24rpx;
 }
 
+.hero-expired .hero-number {
+  color: #e5483f;
+}
+
+.hero-expired .hero-meter {
+  background: rgba(255, 238, 236, 0.68);
+}
+
+.glass-metrics {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: 16rpx;
+  margin-top: 30rpx;
+}
+
+.metric-card {
+  display: block;
+  flex: 1;
+  height: 78rpx;
+  line-height: 78rpx;
+  text-align: center;
+  border: 1rpx solid rgba(255, 255, 255, 0.54);
+  border-radius: 28rpx;
+  background: rgba(255, 255, 255, 0.28);
+  box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(20rpx);
+  -webkit-backdrop-filter: blur(20rpx);
+}
+
+.breakdown-value {
+  display: inline-block;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
+  font-size: 34rpx;
+  font-weight: 700;
+  line-height: 78rpx;
+  vertical-align: middle;
+}
+
+.breakdown-label {
+  display: inline-block;
+  margin-left: 10rpx;
+  color: rgba(16, 20, 24, 0.52);
+  font-size: 24rpx;
+  line-height: 78rpx;
+  vertical-align: middle;
+}
+
 .breakdown-expired {
-  color: #8d2c22;
+  color: #ff3b30;
 }
 
 .breakdown-expiring {
-  color: #8c5d4a;
+  color: #ff9500;
 }
 
 .search-wrap {
@@ -368,26 +510,55 @@ function goToNewItem() {
   align-items: center;
   gap: 18rpx;
   height: 88rpx;
-  margin-top: 36rpx;
-  border-bottom: 1rpx solid rgba(21, 23, 19, 0.18);
+  margin-top: 28rpx;
+  padding: 0 24rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.6);
+  border-radius: 28rpx;
+  background: rgba(255, 255, 255, 0.32);
+  box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(24rpx);
+  -webkit-backdrop-filter: blur(24rpx);
+  box-sizing: border-box;
 }
 
 .search-mark {
-  color: #596154;
-  font-size: 34rpx;
+  color: rgba(16, 20, 24, 0.38);
+  font-size: 30rpx;
 }
 
 .search {
   flex: 1;
   height: 88rpx;
   padding: 0;
-  color: #151713;
+  color: #101418;
   font-size: 30rpx;
   box-sizing: border-box;
 }
 
+.search-clear {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 42rpx;
+  height: 42rpx;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(16, 20, 24, 0.08);
+  color: rgba(16, 20, 24, 0.46);
+  font-size: 30rpx;
+  font-weight: 400;
+  line-height: 42rpx;
+}
+
+.search-clear::after {
+  border: 0;
+}
+
 .search-placeholder {
-  color: #8a9185;
+  color: rgba(16, 20, 24, 0.38);
 }
 
 .quiet-state {
@@ -398,7 +569,7 @@ function goToNewItem() {
   flex-direction: column;
   gap: 18rpx;
   text-align: center;
-  color: #596154;
+  color: rgba(16, 20, 24, 0.48);
 }
 
 .quiet-state.compact {
@@ -406,14 +577,14 @@ function goToNewItem() {
 }
 
 .state-kicker {
-  color: #8c5d4a;
+  color: #4f7f78;
   font-size: 22rpx;
   letter-spacing: 0;
 }
 
 .state-title {
-  color: #151713;
-  font-family: "Songti SC", "STSong", serif;
+  color: #101418;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", sans-serif;
   font-size: 44rpx;
   font-weight: 600;
   line-height: 1.18;
@@ -421,7 +592,7 @@ function goToNewItem() {
 
 .state-copy {
   max-width: 520rpx;
-  color: #687164;
+  color: rgba(16, 20, 24, 0.58);
   font-size: 28rpx;
   line-height: 1.55;
 }
@@ -434,7 +605,7 @@ function goToNewItem() {
 }
 
 .error {
-  color: #8d2c22;
+  color: #ff3b30;
 }
 
 .primary-action,
@@ -443,44 +614,122 @@ function goToNewItem() {
   height: 76rpx;
   margin: 0;
   padding: 0 34rpx;
-  border-radius: 8rpx;
+  border-radius: 999rpx;
   font-size: 26rpx;
   line-height: 76rpx;
 }
 
 .primary-action {
-  background: #151713;
-  color: #f8faf4;
+  background: rgba(16, 20, 24, 0.82);
+  color: #ffffff;
+  backdrop-filter: blur(20rpx);
+  -webkit-backdrop-filter: blur(20rpx);
 }
 
 .secondary-action {
-  border: 1rpx solid rgba(21, 23, 19, 0.2);
-  background: transparent;
-  color: #151713;
+  border: 1rpx solid rgba(255, 255, 255, 0.64);
+  background: rgba(255, 255, 255, 0.32);
+  color: #4f7f78;
+  backdrop-filter: blur(20rpx);
+  -webkit-backdrop-filter: blur(20rpx);
 }
 
 .list {
-  margin-top: 14rpx;
+  display: block;
+  margin-top: 28rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.58);
+  border-radius: 34rpx;
+  background: rgba(255, 255, 255, 0.34);
+  overflow: hidden;
+  box-shadow: 0 26rpx 58rpx rgba(45, 74, 110, 0.1), inset 0 1rpx 0 rgba(255, 255, 255, 0.74);
+  backdrop-filter: blur(30rpx);
+  -webkit-backdrop-filter: blur(30rpx);
 }
 
-.item-row {
+.item-card {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 24rpx;
+  gap: 20rpx;
   width: 100%;
-  min-height: 132rpx;
+  min-height: 142rpx;
   margin: 0;
-  padding: 28rpx 0;
+  padding: 22rpx 24rpx;
   border: 0;
-  border-bottom: 1rpx solid rgba(21, 23, 19, 0.1);
+  border-bottom: 1rpx solid rgba(255, 255, 255, 0.54);
   border-radius: 0;
   background: transparent;
   text-align: left;
   box-sizing: border-box;
 }
 
+.item-card:last-child {
+  border-bottom: 0;
+}
+
+.item-thumb {
+  flex: 0 0 auto;
+  width: 76rpx;
+  height: 76rpx;
+  border-radius: 18rpx;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.68);
+  box-shadow: inset 0 0 0 1rpx rgba(16, 20, 24, 0.04);
+}
+
+.item-thumb-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.64);
+}
+
+.placeholder-mark {
+  position: relative;
+  width: 36rpx;
+  height: 32rpx;
+  border: 2rpx solid rgba(16, 20, 24, 0.42);
+  border-radius: 8rpx;
+  background: transparent;
+  box-sizing: border-box;
+}
+
+.placeholder-dot {
+  position: absolute;
+  top: 7rpx;
+  right: 7rpx;
+  width: 6rpx;
+  height: 6rpx;
+  border-radius: 50%;
+  border: 2rpx solid rgba(16, 20, 24, 0.42);
+  background: transparent;
+  box-sizing: border-box;
+}
+
+.placeholder-stroke {
+  position: absolute;
+  height: 2rpx;
+  border-radius: 99rpx;
+  background: rgba(16, 20, 24, 0.42);
+  transform-origin: left center;
+}
+
+.placeholder-stroke-left {
+  left: 7rpx;
+  bottom: 9rpx;
+  width: 14rpx;
+  transform: rotate(-43deg);
+}
+
+.placeholder-stroke-right {
+  left: 17rpx;
+  bottom: 16rpx;
+  width: 13rpx;
+  opacity: 0.72;
+  transform: rotate(39deg);
+}
+
 .item-main {
+  flex: 1;
   min-width: 0;
 }
 
@@ -491,9 +740,9 @@ function goToNewItem() {
 
 .item-name {
   overflow: hidden;
-  color: #151713;
+  color: #101418;
   font-size: 32rpx;
-  font-weight: 500;
+  font-weight: 600;
   line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -501,27 +750,34 @@ function goToNewItem() {
 
 .item-meta {
   margin-top: 12rpx;
-  color: #737b70;
+  color: rgba(16, 20, 24, 0.48);
   font-size: 24rpx;
+  line-height: 1.35;
+  white-space: normal;
 }
 
 .status {
   flex: 0 0 auto;
-  min-width: 112rpx;
-  padding: 10rpx 0;
+  min-width: 104rpx;
+  padding: 9rpx 14rpx;
   border-radius: 999rpx;
-  color: #596154;
+  border: 1rpx solid rgba(255, 255, 255, 0.58);
+  background: rgba(255, 255, 255, 0.38);
+  color: rgba(16, 20, 24, 0.58);
   font-size: 24rpx;
-  text-align: right;
+  font-weight: 500;
+  text-align: center;
 }
 
 .status-expired {
-  color: #8d2c22;
+  background: rgba(255, 238, 236, 0.66);
+  color: #e5483f;
 }
 
 .status-expires-today,
 .status-expiring {
-  color: #8c5d4a;
+  background: rgba(255, 247, 230, 0.72);
+  color: #ff9500;
 }
 
 .modal-backdrop {
@@ -532,21 +788,27 @@ function goToNewItem() {
   align-items: flex-end;
   justify-content: center;
   padding: 32rpx;
-  background: rgba(21, 23, 19, 0.32);
+  background: rgba(22, 31, 42, 0.26);
+  backdrop-filter: blur(18rpx);
+  -webkit-backdrop-filter: blur(18rpx);
   box-sizing: border-box;
 }
 
 .modal {
   width: 100%;
   padding: 44rpx 36rpx 36rpx;
-  border-radius: 8rpx;
-  background: #fbfcf7;
+  border: 1rpx solid rgba(255, 255, 255, 0.66);
+  border-radius: 32rpx;
+  background: rgba(255, 255, 255, 0.74);
+  box-shadow: 0 30rpx 68rpx rgba(22, 31, 42, 0.18);
+  backdrop-filter: blur(34rpx);
+  -webkit-backdrop-filter: blur(34rpx);
   box-sizing: border-box;
 }
 
 .modal-title {
   display: block;
-  font-family: "Songti SC", "STSong", serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", sans-serif;
   font-size: 40rpx;
   font-weight: 600;
 }
@@ -554,8 +816,8 @@ function goToNewItem() {
 .modal-input {
   height: 92rpx;
   margin-top: 28rpx;
-  border-bottom: 1rpx solid rgba(21, 23, 19, 0.18);
-  color: #151713;
+  border-bottom: 1rpx solid rgba(16, 20, 24, 0.12);
+  color: #101418;
   font-size: 30rpx;
 }
 
