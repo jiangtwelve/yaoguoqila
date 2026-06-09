@@ -1,15 +1,16 @@
 ---
 status: active
 current_task: TASK-011
+current_release: v0.1
 next_action: continue_implementation
 blocked: false
-updated: 2026-06-08
+updated: 2026-06-09
 ---
 
 # Handoff
 
 ## 当前状态
-项目处于 setup/design 阶段。已根据用户初始设想建立项目连续性文档，产品方向为「家庭单位下的物品保质期管理和临期/过期提醒」，目标形态为微信小程序、Android、iOS 三端通用。
+项目处于 `v0.1 小程序测试版闭环` 阶段。当前目标不是无限扩功能，而是完成微信小程序内部测试版体验闭环：真实云联调、家庭切换、图片云存储 adapter、加入家庭最小流程和版本级验收。
 
 ## 已完成
 - 创建 AGENTS.md，支持后续短提示继续设计/开发。
@@ -39,20 +40,24 @@ updated: 2026-06-08
 - 用户要求先清空旧函数和旧数据库后再操作；已删除 24 个旧函数和 8 个旧集合，并复查函数数为 0、集合数为 0。
 - 已创建新集合 `users`、`families`、`items`、`locations`、`familyMembers`、`notificationLogs`，并添加基础索引。
 - 已新增并部署云函数 `yaoguoqiApi`，使用单入口路由承载 `home.getFamilyHome`、`item.createItem` 等逻辑动作；前端 cloud adapter 已改为调用物理函数 `yaoguoqiApi` 并传入 `action/payload`。
+- 已根据更新后的 agent-project-continuity lifecycle 规则补充 `docs/roadmap.md`、`docs/releases/v0.1.md`，并创建 TASK-012 到 TASK-015 作为 v0.1 必需任务。
 - 用户在 2026-06-07 反馈页面过于克制、不够家用；第一版调为「温暖家用」后，用户又指出仍像旧设计优化；第二版改成「冰箱门便签板」后，用户认为好看但不适合所有人；第三版改为 iOS 普适极简后，用户认为不好看且不够颠覆。当前 Design Anchor 已推倒重做为「流光毛玻璃」，首页使用 glass dashboard、玻璃搜索框和半透明列表；新增表单使用玻璃录入台风格。
 
 ## 当前任务
-- TASK-011: 搭建微信云开发后端基础能力。
+- TASK-011: 搭建微信云开发后端基础能力。`release: v0.1`
 
 ## 下一步
 - 继续 TASK-011：切换前端环境到 cloud repository，在微信开发者工具中从小程序端真实调用 `yaoguoqiApi`，验证 OPENID、首页初始化、设置昵称、创建家庭、新增物品、列表、详情、编辑、标记用完和删除。
 - MCP 管理端调用没有小程序 OPENID，因此 `home.getFamilyHome` 返回 `无法获取用户身份` 是预期结果，不代表小程序端不可用。
+- TASK-011 完成后按 `docs/releases/v0.1.md` 继续 TASK-012 家庭切换，不要跳过版本目标直接做 Backlog。
 
 ## 关键文件
 - AGENTS.md
 - docs/product.md
 - docs/architecture.md
 - docs/page-map.md
+- docs/roadmap.md
+- docs/releases/v0.1.md
 - docs/api.md
 - docs/tasks.md
 - docs/tasks/TASK-004-family-home-anchor.md
@@ -63,10 +68,14 @@ updated: 2026-06-08
 - docs/tasks/TASK-009-pull-to-refresh.md
 - docs/tasks/TASK-010-api-contract-validation.md
 - docs/tasks/TASK-011-wechat-cloud-backend-foundation.md
+- docs/tasks/TASK-012-family-switch.md
+- docs/tasks/TASK-013-cloud-storage-adapter.md
+- docs/tasks/TASK-014-family-invite-join.md
+- docs/tasks/TASK-015-v0-1-acceptance.md
 - docs/decisions/008-cloudbase-mcp-for-backend-deployment.md
 - docs/decisions/009-cloud-function-router.md
 - cloudfunctions/yaoguoqiApi/index.js
 
 ## 注意事项
-- git status 中已有与本任务无关的 `skills/agent-project-continuity/...` 删除记录，不要回滚或改动，除非用户明确要求。
+- 当前存在未提交的生命周期/版本规划文档补充；接手前先查看 `git status`，确认没有误触业务代码。
 - 任何 UI 原型完成后都需要用户验收，不能由 agent 自行标记 Done。

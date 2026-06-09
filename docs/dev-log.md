@@ -4,6 +4,18 @@ updated: 2026-06-08
 
 # Dev Log
 
+## 2026-06-09 Lifecycle And Release Planning
+- Goal: 根据用户更新后的 `agent-project-continuity` lifecycle/version control 规则，补齐项目版本目标和 release 级文档。
+- Changes:
+  - 新增 `docs/roadmap.md`，定义 v0.1、v0.2、v0.3、v1.0 生命周期方向。
+  - 新增 `docs/releases/v0.1.md`，定义“小程序测试版闭环”的 included scope、excluded scope、exit criteria 和 release acceptance。
+  - 更新 `docs/tasks.md`，将 TASK-011 到 TASK-015 挂到 `release: v0.1`。
+  - 新增 TASK-012 家庭切换、TASK-013 图片云存储 adapter、TASK-014 加入家庭与邀请最小流程、TASK-015 v0.1 测试版验收与体验修复。
+  - 更新 `AGENTS.md` 和 `CLAUDE.md` 的 Read First 与 lifecycle 规则。
+  - 更新 `docs/handoff.md`，记录当前 active release 为 v0.1。
+- Verification:
+  - 文档结构检查完成；本次未改业务代码，未运行构建。
+
 ## 2026-06-08 TASK-011 Cloud Environment Reset And Deploy
 - 用户要求先清空云环境中的旧函数和旧数据库集合，再继续 TASK-011 后端操作。
 - CloudBase Cleanup:

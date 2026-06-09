@@ -1,23 +1,27 @@
 ---
 status: active
 current_task: TASK-011
-updated: 2026-06-08
+current_release: v0.1
+updated: 2026-06-09
 ---
 
 # Tasks
 
 ## Current
-- TASK-011: 搭建微信云开发后端基础能力。
+- TASK-011: 搭建微信云开发后端基础能力。`release: v0.1`
 
 ## Ready
-- 暂无。
+- TASK-012: 家庭切换功能。`release: v0.1`
+- TASK-013: 图片云存储 adapter 正式接入。`release: v0.1`
+- TASK-014: 加入家庭与邀请最小流程。`release: v0.1`
+- TASK-015: v0.1 测试版验收与体验修复。`release: v0.1`
 
 ## Blocked
 - 暂无。
 
 ## Backlog
-- 首页大数据量列表策略设计：近期优先、分组折叠/懒加载，必要时配合游标分页和虚拟列表。
-- 家庭成员邀请与权限细分。
+- 首页大数据量列表策略设计：近期优先、分组折叠/懒加载，必要时配合游标分页和虚拟列表。`deferred`
+- 家庭成员邀请与权限细分。`v0.3 candidate`
 - 微信订阅消息正式模板配置。
 - Android/iOS 推送服务接入。
 - 条码识别。

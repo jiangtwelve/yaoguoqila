@@ -3,10 +3,12 @@ id: TASK-011
 title: 搭建微信云开发后端基础能力
 status: Current
 type: backend_implementation
+release: v0.1
+release_required: true
 dependencies: [TASK-010]
 requires_user_acceptance: false
 acceptance_status: not_required
-updated: 2026-06-08
+updated: 2026-06-09
 ---
 
 # TASK-011: 搭建微信云开发后端基础能力
