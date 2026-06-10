@@ -1,11 +1,12 @@
 ---
 status: draft
+project_type: ui_product
 frontend_stack: "uni-app + Vue 3 + TypeScript"
 backend_stack: "WeChat Cloud Development"
 database: "WeChat Cloud Database"
 auth: "WeChat Login"
 deployment: "WeChat Mini Program Cloud Development"
-updated: 2026-06-06
+updated: 2026-06-10
 ---
 
 # Architecture
@@ -28,6 +29,7 @@ updated: 2026-06-06
 - 适合：首批用户主要来自微信生态。
 
 ## 已确认技术方向
+- Project type: `ui_product`。当前 v0.1 release 主表面是微信小程序；后端/API、CloudBase 和云存储是支撑小程序测试版闭环的能力。
 - Frontend: `uni-app + Vue 3 + TypeScript`。原因是三端通用优先级较高，需要同一套代码覆盖微信小程序、Android 和 iOS。
 - Backend: 微信云开发优先，包括云函数、云数据库、云存储。
 - Backend tooling: 使用 CloudBase MCP 辅助部署和联调微信云开发资源；本地模式通过 `npx @cloudbase/cloudbase-mcp@latest` 启动。

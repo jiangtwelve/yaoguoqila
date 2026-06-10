@@ -30,15 +30,16 @@
 
 ## Default Development Flow
 1. 先确认产品方向和 MVP 边界。
-2. 再确认技术选型，并记录到 docs/architecture.md 和 docs/decisions/。
-3. 在实现 Design Anchor 前确认 docs/page-map.md。
-4. 使用运行中的前端作为设计源，而不是单独维护高保真设计稿。
-5. 做静态前端页面时优先使用 `frontend-design` skill；若不可用则继续默认前端开发流程，并记录限制。
-6. 静态页面使用 preview fixtures；业务数据不要直接硬编码在模板或页面标记里。
-7. 页面通过 service/adapter 获取 mock 或真实数据，避免页面直接依赖 mock 文件。
-8. API contract 先草拟，待 mock 前端验证后再进入 stable。
-9. 后端按照 validated/stable API contract 实现。
-10. 每个有意义的任务结束前更新 dev-log、tasks、handoff，必要时更新 decisions。
+2. 明确项目类型和当前 release 主表面；本项目当前按 `ui_product` 处理，v0.1 主表面是微信小程序，后端/API 为当前阶段的支撑能力。
+3. 再确认技术选型，并记录到 docs/architecture.md 和 docs/decisions/。
+4. UI 产品任务在实现 Design Anchor 前确认 docs/page-map.md 和页面风格方向。
+5. 使用运行中的前端作为设计源，而不是单独维护高保真设计稿。
+6. 做静态前端页面时优先使用 `frontend-design` skill；若不可用则继续默认前端开发流程，并记录限制。
+7. 静态页面使用 preview fixtures；业务数据不要直接硬编码在模板或页面标记里。
+8. 页面通过 service/adapter 获取 mock 或真实数据，避免页面直接依赖 mock 文件。
+9. API contract 先草拟，待 mock 前端和真实集成验证后再进入 stable；影响长期行为的 stable API 变更需要 owner approval。
+10. 后端按照 validated/stable API contract 实现。
+11. 每个有意义的任务结束前更新 dev-log、tasks、handoff，必要时更新 decisions。
 
 ## Lifecycle And Release Planning
 - 当前 active release 为 `v0.1 小程序测试版闭环`，详见 docs/roadmap.md 和 docs/releases/v0.1.md。
@@ -64,6 +65,7 @@
 Supported next_action values:
 - continue_implementation
 - wait_for_user_acceptance
+- wait_for_owner_approval
 - wait_for_release_acceptance
 - ask_product_question
 - fix_verification_failure
@@ -73,6 +75,8 @@ Supported next_action values:
 
 ## User Confirmation Required
 - MVP 范围
+- 生命周期 / release 计划和当前 release 完成线
+- 项目类型或当前 release 主表面发生变化
 - 技术选型
 - Design Anchor 实现前的页面地图
 - 首个已接受的 Design Anchor
@@ -111,10 +115,12 @@ Supported next_action values:
 Structured metadata 使用稳定值：
 - task status: `ready | current | blocked | done`
 - acceptance_status: `not_required | pending | accepted | failed`
-- next_action: `continue_implementation | wait_for_user_acceptance | wait_for_release_acceptance | ask_product_question | fix_verification_failure | start_next_ready_task | verify_external_state | blocked`
+- next_action: `continue_implementation | wait_for_user_acceptance | wait_for_owner_approval | wait_for_release_acceptance | ask_product_question | fix_verification_failure | start_next_ready_task | verify_external_state | blocked`
 
 `docs/handoff.md` 只保留下一位 agent 接手所需的当前状态、下一步、阻塞、最新外部状态和关键文件；历史细节放入 `docs/dev-log.md`。
 
-## UI Acceptance
-- 任何用户可见 UI 或交互变化在标记 Done 前都需要用户验收，包括按钮、布局、样式、导航、弹窗、表单、文案、页面状态和交互反馈。
-- 内部重构若保持已接受的视觉和交互行为，只需完成验证并记录。
+## Acceptance And Approval
+- 用户可见 UI、交互、工作流、release 行为或外部可见集成行为，在标记 Done 前需要 scoped user acceptance。
+- 长期产品方向、stable API、架构、数据模型、安全/隐私、release 范围变化，需要 owner approval，并记录到对应 source of truth；长期决策还要写入 docs/decisions/。
+- 内部重构、测试、工具链、文档瘦身和保持已接受行为不变的实现调整，只需 local verification 并记录。
+- 模糊回复如“继续”“下一步”“看起来不错”“looks good”不算明确验收；若正在等待验收或 approval，应先给出对应清单。

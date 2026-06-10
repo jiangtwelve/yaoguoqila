@@ -12,6 +12,7 @@ updated: 2026-06-10
 ## Index
 
 ### 当前连续性与 TASK-011
+- `2026-06-10 Optimized Continuity Rule Refresh`：按新版 agent-project-continuity 规则同步项目类型路由、owner approval 和验收分层。
 - `2026-06-10 Continuity Compacting`：新版 project continuity 规则落地，压缩 handoff 和 TASK-011。
 - `2026-06-09 WeChat DevTools Auto Device Debug Config Fix`：自动真机调试 `subPackages` 兼容修复。
 - `2026-06-09 Clean Cloud Database For Acceptance`：清空 CloudBase 业务数据，准备干净验收。
@@ -61,6 +62,19 @@ updated: 2026-06-10
   - 已确认本轮只修改连续性文档，未触碰业务代码或 CloudBase。
 - Gaps:
   - 本次只整理连续性文档，不推进微信开发者工具真实联调，不操作 CloudBase。
+
+## 2026-06-10 Optimized Continuity Rule Refresh
+- Goal: 根据新版 `agent-project-continuity` skill 再次优化项目连续性规则，降低后续 agent 误判任务流程或过度验收的风险。
+- Changes:
+  - 更新 `AGENTS.md` 和 `CLAUDE.md`：补充项目类型路由，明确本项目当前按 `ui_product` 处理，v0.1 主表面是微信小程序，后端/API 是当前 release 支撑能力。
+  - 更新 `AGENTS.md` 和 `CLAUDE.md`：新增 `wait_for_owner_approval`，并把验收拆为 scoped user acceptance、owner approval、local verification。
+  - 更新 `docs/architecture.md`：新增 `project_type: ui_product`，记录当前 release 主表面和后端/API 的支撑定位。
+  - 更新 `docs/handoff.md`：移除旧字段 `acceptance_required`，新增 `project_type: ui_product`，并提示 stable API 升级需按 owner approval 规则确认。
+  - 更新 `docs/tasks/TASK-011-wechat-cloud-backend-foundation.md`：在剩余工作和风险中补充 stable API / 架构 / 数据模型等长期变化需要 owner approval。
+- Verification:
+  - 本次只修改连续性文档，未触碰业务代码、构建产物或 CloudBase。
+- Gaps:
+  - 未推进微信开发者工具真实主流程联调；TASK-011 的下一步仍以 `docs/handoff.md` 为准。
 
 ## 2026-06-09 Minimal Modal Input Focus Refinement
 - Goal: 按用户反馈回收设置昵称和创建家庭弹窗的信息堆叠，保持极简风格，同时让输入框本身更显眼。

@@ -2,10 +2,10 @@
 status: active
 current_task: TASK-011
 current_release: v0.1
+project_type: ui_product
 next_action: continue_implementation
 blocked: false
 blocker: ""
-acceptance_required: false
 acceptance_status: not_required
 external_state_status: ready_for_clean_acceptance
 updated: 2026-06-10
@@ -16,7 +16,7 @@ updated: 2026-06-10
 ## 当前状态
 项目处于 `v0.1 小程序测试版闭环`，当前任务是 `TASK-011 搭建微信云开发后端基础能力`。
 
-当前目标不是继续扩功能，而是在微信开发者工具中用真实 CloudBase 干净数据完成主流程联调：首次进入、设置昵称、创建家庭、新增物品、临期确认、保存 loading、首页列表、详情、编辑、标记用完和删除。
+项目类型按 `ui_product` 处理；当前 release 主表面是微信小程序，后端/API 是 v0.1 闭环的支撑能力。当前目标不是继续扩功能，而是在微信开发者工具中用真实 CloudBase 干净数据完成主流程联调：首次进入、设置昵称、创建家庭、新增物品、临期确认、保存 loading、首页列表、详情、编辑、标记用完和删除。
 
 ## 当前任务快照
 - 已完成 CloudBase MCP 准备、旧函数/旧集合清理、新集合和索引创建。
@@ -46,7 +46,7 @@ updated: 2026-06-10
    - 编辑
    - 标记用完
    - 删除
-3. 若真实联调通过，更新 TASK-011 验证结果，并准备把 TASK-011 标记为完成。
+3. 若真实联调通过，更新 TASK-011 验证结果；如准备把 `docs/api.md` 从 `validated` 升为 `stable`，先按 owner approval 规则确认长期 API 行为。
 4. TASK-011 完成后，按 `docs/releases/v0.1.md` 进入 `TASK-012 家庭切换功能`，不要跳过版本目标直接做 Backlog。
 
 ## 阻塞
@@ -72,5 +72,6 @@ updated: 2026-06-10
 ## 注意事项
 - 接手前先查看 `git status`，不要覆盖其他 agent 的未提交变更。
 - 任何用户可见 UI 或交互变化在标记任务完成前都需要用户验收；内部重构只需验证并记录。
+- stable API、架构、数据模型、安全/隐私或 release 范围变化需要 owner approval，并记录到对应 source of truth。
 - 高影响 CloudBase 操作必须先确认环境和操作范围，操作后记录可观察结果。
 - 历史细节查 `docs/dev-log.md`，不要把长历史重新塞回 `docs/handoff.md`。

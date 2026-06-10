@@ -75,9 +75,11 @@ updated: 2026-06-10
 2. 用干净 CloudBase 数据跑通首次进入、设置昵称、创建家庭。
 3. 跑通新增物品、临期/今天到期/已过期二次确认、保存 loading、首页列表与统计。
 4. 跑通详情、编辑、标记用完、删除。
-5. 若联调通过，更新 `docs/api.md` 是否可从 `validated` 升为 `stable` 的判断，并完成 TASK-011 文档收尾。
+5. 若联调通过，更新 `docs/api.md` 是否可从 `validated` 升为 `stable` 的判断；如升级会固定长期 API 行为，先按 owner approval 规则确认。
+6. 完成 TASK-011 文档收尾。
 
 ## Risks And Notes
 - 当前 `requires_user_acceptance: false`，但如果继续改 UI 或交互，需要按 `docs/ui.md` 和 `AGENTS.md` 进入用户验收。
+- stable API、架构、数据模型、安全/隐私或 release 范围变化需要 owner approval。
 - CloudBase 高影响操作必须记录环境、资源、操作结果；需要清库时先确认目标环境。
 - TASK-011 已经跨越后端、前端适配和小程序体验修复；新发现若不直接阻塞真实联调，应拆到后续 TASK 或 Backlog。
