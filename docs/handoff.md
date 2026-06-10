@@ -4,105 +4,73 @@ current_task: TASK-011
 current_release: v0.1
 next_action: continue_implementation
 blocked: false
+blocker: ""
+acceptance_required: false
+acceptance_status: not_required
+external_state_status: ready_for_clean_acceptance
 updated: 2026-06-10
 ---
 
 # Handoff
 
 ## 当前状态
-项目处于 `v0.1 小程序测试版闭环` 阶段。当前目标不是无限扩功能，而是完成微信小程序内部测试版体验闭环：真实云联调、家庭切换、图片云存储 adapter、加入家庭最小流程和版本级验收。
+项目处于 `v0.1 小程序测试版闭环`，当前任务是 `TASK-011 搭建微信云开发后端基础能力`。
 
-## 已完成
-- 创建 AGENTS.md，支持后续短提示继续设计/开发。
-- 草拟产品文档、架构文档、页面地图、UI 规则、API contract 和任务队列。
-- 用户确认 MVP 采用「个人家庭轻协作」：首版保留家庭作为物品组织单位，但不实现完整多人邀请、审批和权限管理。
-- 用户确认前端技术路线采用 `uni-app + Vue 3 + TypeScript`，优先服务微信小程序、Android、iOS 三端通用目标。
-- 用户确认首版提醒采用「应用内提醒优先」：先做过期状态、首页提醒、列表提醒和模拟通知；真实微信订阅消息和 App 推送后续接入。
-- 用户提出并确认 MVP 不需要三页面/底部 Tab：一个首页即可，首页展示当前家庭全部物品，按剩余保质期排序，支持查询、新增，点击家庭名称切换家庭。
-- 用户确认首页不做状态筛选，只保留查询和默认剩余保质期升序排序。
-- 用户确认新增/编辑物品同时支持两种日期录入方式：直接填写过期日期，或填写生产日期 + 保质期自动计算；表单用「或」分隔两种方式。
-- 用户确认后端技术路线选择微信云开发优先：云函数、云数据库、云存储和微信登录，用于更快完成微信小程序 MVP；三端扩展通过 service/adapter 边界预留。
-- 用户补充首次进入需要手动设置昵称，因为小程序无法直接获取真实微信昵称；设置昵称用单输入框弹窗完成，不单独设置页面。
-- 用户修正无家庭流程：无家庭时首页展示空家庭状态，引导用户创建家庭或接受他人邀请加入家庭；不直接弹出创建家庭弹窗。创建家庭由用户主动点击后打开单输入框弹窗。
-- 用户确认小程序正式名称为「要过期」，项目文档已同步；对外介绍不使用相关品类关键词。
-- TASK-003 已完成：已创建 uni-app/Vue/TypeScript 项目骨架、domain models、fixtures、mock service、微信云开发 cloud adapter、首页薄页面和基础验证。
-- TASK-005 已实现：新增 `src/pages/item-form/index.vue`，首页新增按钮可进入表单，service contract 增加 `item.getFormOptions`，表单通过 service 获取家庭、位置、分类。
-- TASK-005 已按用户反馈调整：标题安全区与首页统一；表单顺序为图片、名称、日期、位置、备注；位置自由输入加历史快捷选择；分类和提醒字段从表单移除；图片选择使用 `uni.chooseImage`；日期使用 picker；保质期单位使用轻量下拉选择器；「生产日期 + 保质期」区域已统一字号、颜色和行式布局。
-- TASK-005 已由用户确认验收完成，当前进入 TASK-006。
-- TASK-006 已实现第一版原型：新增物品详情页、首页点击物品进入详情、详情页支持标记已用完、删除和编辑入口；详情页不展示提醒，修改到期日归入编辑信息。编辑页已支持物品回显和保存修改，首页返回会刷新当前库存，统计不再受搜索影响，搜索框已增加清空按钮。
-- TASK-006 已由用户确认验收完成，当前进入 TASK-007。
-- TASK-007 已由用户确认验收完成：数据模型新增 `imageUrls`，表单支持多图网格选择/删除，首页和详情页优先展示第一张图片作为封面；详情页多图使用走马灯并支持点击放大预览；首页普通从详情页返回时保留滚动位置，数据变更后再刷新。
-- TASK-008 已由用户确认验收完成：首页物品行支持左滑露出删除按钮，删除前二次确认，确认后调用 service 删除并同步刷新列表与顶部统计；滑动动画已优化为跟手移动。
-- TASK-009 已由用户确认验收完成：首页、物品详情页支持下拉刷新；新增/编辑页不启用下拉刷新；下拉触发后原生下拉区域立即收回，由顶部小浮层显示“正在刷新”，失败时同一浮层显示失败提示。临时失败 mock 已关闭。
-- TASK-010 已完成：`docs/api.md` 从 `draft` 升级为 `validated`，已对齐当前前端 domain models、repository contract、云函数 payload/result、多图、位置自由输入、详情、删除和标记用完需求。
-- TASK-011 已开始：已阅读 CloudBase MCP 文档，确认本地模式适合后续云函数/数据库/云存储部署；已将 `cloudbase` MCP server 写入 `~/.codex/config.toml`，并通过授权网络探测解析到 `@cloudbase/cloudbase-mcp@2.21.1`。Codex 重启后 MCP 已可用，并自动绑定环境 `cloud1-d8gr12cmd6578bfd0`。
-- 已通过 CloudBase MCP 盘点云环境：原本已有 `login`、`familyCreate`、`itemList`、`itemAdd`、`itemUpdate`、`itemDelete` 等历史函数，以及 `users`、`families`、`items`、`locationHistory` 等集合。旧字段模型和当前 validated contract 不一致，读接口存在权限校验缺口。
-- 用户要求先清空旧函数和旧数据库后再操作；已删除 24 个旧函数和 8 个旧集合，并复查函数数为 0、集合数为 0。
-- 已创建新集合 `users`、`families`、`items`、`locations`、`familyMembers`、`notificationLogs`，并添加基础索引。
-- 已新增并部署云函数 `yaoguoqiApi`，使用单入口路由承载 `home.getFamilyHome`、`item.createItem` 等逻辑动作；前端 cloud adapter 已改为调用物理函数 `yaoguoqiApi` 并传入 `action/payload`。
-- 已根据更新后的 agent-project-continuity lifecycle 规则补充 `docs/roadmap.md`、`docs/releases/v0.1.md`，并创建 TASK-012 到 TASK-015 作为 v0.1 必需任务。
-- 用户在 2026-06-07 反馈页面过于克制、不够家用；第一版调为「温暖家用」后，用户又指出仍像旧设计优化；第二版改成「冰箱门便签板」后，用户认为好看但不适合所有人；第三版改为 iOS 普适极简后，用户认为不好看且不够颠覆。当前 Design Anchor 已推倒重做为「流光毛玻璃」，首页使用 glass dashboard、玻璃搜索框和半透明列表；新增表单使用玻璃录入台风格。
-- 已为 cloud adapter 增加 Vitest 测试：`wechatCloudClient.test.ts`（4 个测试）、`cloudHomeRepository.test.ts`（7 个测试）、`homeRepository.test.ts`（2 个测试）。
-- 已将 `wechatCloudClient.ts` 从 `uniCloud.callFunction` 改为 `wx.cloud.callFunction`，因 uni-app CLI 项目无法使用 uniCloud runtime；首次调用时自动 `wx.cloud.init()`。
-- 已修复 vitest.config.ts 中文路径 alias 解析（改用 `fileURLToPath`）。
-- 已提取 `createHomeRepository(useMockEnv)` 以测试 VITE_USE_MOCK=false 分支。
-- 已写入小程序 appid `wx494b5e7688cd2848` 到 `src/manifest.json`。
-- 已修复首页弹窗交互：设置昵称和创建家庭弹窗添加 v-model 和保存事件处理；弹窗改为居中显示；首次加载空状态改为点状动画且 needsProfileName 时不再空白。
-- 已修复 wx 运行时判断风险：`!wx` 改为 `typeof wx === 'undefined'`，避免非微信运行时 ReferenceError；新增 3 个测试覆盖 wx 不可用、wx.cloud 缺失和 wx.cloud.callFunction 缺失场景。
-- 已补充项目规则：AGENTS.md 和 CLAUDE.md 新增 Documentation Update Rule 章节，明确每次任务完成后必须更新的文档清单。
-- 已按用户反馈重新设计首页设置昵称和创建家庭弹窗：加入标题组、主题标识、说明文案和玻璃输入框，使其与当前流光毛玻璃首页风格一致。
-- 已将所有页面初始加载统一改为骨架屏：首页模拟 dashboard/search/list，详情页模拟图片和信息面板，新增/编辑页模拟图片区、字段和日期模块；不再使用空白页中间单独 spinner。
-- 用户确认 `docs/ui.md` 中的「流光毛玻璃」UI 基线可更新为已验收；后续仍会样式微调，但每次影响视觉/交互的微调都必须同步更新 `docs/ui.md`。
-- 已审查 Claude Code 今日 TASK-011 未提交改动，发现并修复新增页在表单选项加载前提前渲染表单的问题；新增/编辑页保存按钮禁用态和保存中态已重新设计为更清晰的玻璃按钮状态。
-- 已按用户反馈继续微调新增/编辑页：新增模式进入表单不再显示骨架屏，编辑模式仍保留骨架屏；禁用保存按钮改为去饱和灰玻璃，明确表达不可点击。
-- 已按用户反馈新增安全确认：新增物品如果会直接成为临期、今天到期或已过期状态，保存前会二次确认；并修复「生产日期 + 保质期」里“填写”占位文本首次布局右偏的问题。
-- 已修复微信开发者工具中新增临期物品点击保存时报 `a.getItemStatus` 未定义的问题：表单页新增确认和预计到期状态改为页面内稳定计算，不再依赖 `@/domain/expiry` 的运行时导出。
-- 已修复新增临期物品点击保存后无任何反应的问题：保存按钮只有保存中才原生禁用；表单未准备、缺字段或无家庭时点击会提示原因，满足条件时继续弹出临期/过期二次确认。
-- 已彻查新增临期确认链路最终根因：微信小程序 `showModal` 按钮文案最多 4 个字符，原 `cancelText: '再检查一下'` 超限导致弹窗 fail；已改为 `再检查` / `仍保存`，并在 `docs/ui.md` 记录该约束。
-- 已按用户反馈优化新增风险确认弹窗：显示标题「提醒」，提示文本居中，按钮为 `取消` / `确认`；临期显示「该物品还有 x 天就要过期了，确定添加吗？」，今天到期显示「该物品今天就要过期了，确定添加吗？」，已过期显示「该物品已过期，确定添加吗？」。
-- 已按用户反馈将设置昵称、创建家庭和新增风险确认统一提取为 `GlassModal` 组件；后续类似轻量弹窗统一沿用这一套视觉和交互。当前弹窗遮罩已减薄，避免看不清蒙版后的页面。
-- 已修复保存按钮覆盖备注 `textarea` 时可能同时触发保存和键盘的问题：新增/编辑页固定保存按钮使用 `cover-view` 覆盖原生输入层，保存入口主动收起键盘，风险确认打开时隐藏保存覆盖层。
-- 已按用户反馈补充项目级组件抽取规则：当同类 UI、交互流程、状态处理或样式结构在 2 处及以上出现，且需要统一微调或保持同一视觉语言时，agent 应主动抽取共享组件、组合函数或样式抽象；若暂缓抽取，必须记录原因和后续触发条件。
-- 已按用户反馈补充新增/编辑物品表单 loading/saving 锁定：表单加载中或保存中禁用图片、输入框、picker、历史位置和备注操作；保存中增加 `cover-view` 触摸屏蔽层，避免小程序原生输入组件继续响应。
-- 已按用户要求在 2026-06-09 清空真实 CloudBase 业务数据：环境 `cloud1-d8gr12cmd6578bfd0` 中 `users`、`families`、`items`、`locations`、`familyMembers`、`notificationLogs` 清理后计数均为 0，可从首次进入流程重新验收。
-- 已按用户反馈继续优化本轮验收体验：设置昵称和创建家庭弹窗已回到极简结构，移除堆叠提示文本和字段标签，通过更高、更亮、更有边界的大输入槽突出输入动作；临期确认缩短为「还有 x 天到期，确认添加吗？」并高亮天数；新增/编辑保存中升级为全屏轻玻璃 `cover-view` loading。
-- 本轮 UI 调整完成后已再次清空真实 CloudBase 业务数据：清理前 `users=1`、`families=1`、`items=3`、`locations=2`、`familyMembers=0`、`notificationLogs=0`，清理后六个集合均为 0。
-- 已修复微信开发者工具自动真机调试编译异常：`src/pages.json` 显式声明 `"subPackages": []`，构建后 `dist/build/mp-weixin/app.json` 稳定包含该字段，避免 DevTools `2.01.2510290` 在无分包项目上读取 `subPackages` 时报错。
-- 已将本地 agent/tooling 产物 `.agents/`、`.claude/`、`.mcp.json`、`skills-lock.json` 加入 `.gitignore`，避免误提交本机配置和工具缓存。
+当前目标不是继续扩功能，而是在微信开发者工具中用真实 CloudBase 干净数据完成主流程联调：首次进入、设置昵称、创建家庭、新增物品、临期确认、保存 loading、首页列表、详情、编辑、标记用完和删除。
 
-## 当前任务
-- TASK-011: 搭建微信云开发后端基础能力。`release: v0.1`
+## 当前任务快照
+- 已完成 CloudBase MCP 准备、旧函数/旧集合清理、新集合和索引创建。
+- 已部署单入口云函数 `yaoguoqiApi`，前端 cloud adapter 通过 `wx.cloud.callFunction` 调用 `action/payload`。
+- 已完成并验证一批 TASK-011 期间的小程序端兼容和体验修复：弹窗绑定、骨架屏、保存按钮状态、临期/过期二次确认、`GlassModal` 抽取、`textarea` 触摸隔离、表单 loading/saving 锁定、自动真机调试 `subPackages` 兼容。
+- `docs/ui.md` 已记录当前「流光毛玻璃」已验收 UI 基线，以及弹窗、骨架屏、保存 loading、风险确认等规则。
+- `docs/api.md` 仍为 `validated`，待真实云函数和前端集成联调通过后再升级为 `stable`。
+
+## 最新外部状态
+- CloudBase 环境：`cloud1-d8gr12cmd6578bfd0`。
+- 云函数：仅保留新单入口 `yaoguoqiApi`。
+- 集合：`users`、`families`、`items`、`locations`、`familyMembers`、`notificationLogs`。
+- 最新一次业务数据清理：2026-06-09 UI 调整后再次清空，清理后六个业务集合计数均为 0。
+- 下一位 agent 若不能确认外部状态仍是干净数据，应先复核集合计数；必要时将 `next_action` 改为 `verify_external_state`。
 
 ## 下一步
-- 继续 TASK-011：在微信开发者工具中重新联调，验证自动真机调试可进入编译/运行，随后继续设置昵称、创建家庭、新增物品、临期确认、保存 loading、列表、详情、编辑、标记用完和删除主流程。
-- 已完成修复：1) 从 `uniCloud.callFunction` 改为 `wx.cloud.callFunction`（CLI 项目无法使用 uniCloud）；2) 设置昵称和创建家庭弹窗已添加 v-model 绑定、事件处理和保存状态，并重新设计为流光毛玻璃风格；3) 首页/详情/编辑页初始加载已统一为贴近页面真实结构的骨架屏，且 `needsProfileName` 为 true 时不再显示空白加载态；4) 新增表单进入时直接显示空白录入表单；5) 新增/编辑页保存按钮禁用态和保存中态已增强可见性；6) 新增临期/今天到期/已过期物品前会二次确认；7) 新增临期物品保存确认在微信开发者工具中的 `a.getItemStatus` 运行时报错已修复；8) 新增临期物品点击保存无反馈的问题已修复；9) 新增临期确认弹窗按钮文案超出小程序 `showModal` 限制导致 fail 的问题已修复；10) 新增风险确认弹窗文案、按钮和提醒标题已按用户反馈调整；11) 设置昵称、创建家庭和新增风险确认已统一提取为 `GlassModal`；12) 新增风险确认弹窗遮罩已减薄、正文居中；13) 保存按钮覆盖备注 `textarea` 时的触摸穿透/焦点竞争已用 `cover-view` 与 `hideKeyboard()` 隔离；14) 项目级组件抽取规则已写入 `AGENTS.md`、`CLAUDE.md` 和 `docs/ui.md`；15) 新增/编辑物品表单 loading/saving 期间已锁定其他表单操作；16) 真实 CloudBase 业务集合已清空并复核为 0；17) 设置昵称/创建家庭弹窗已调整为极简大输入槽，临期天数已高亮，保存中已改为全屏轻玻璃 loading；18) UI 调整完成后真实 CloudBase 业务集合已再次清空并复核为 0；19) 自动真机调试 `subPackages` 缺字段编译异常已修复。
-- TASK-011 完成后按 `docs/releases/v0.1.md` 继续 TASK-012 家庭切换，不要跳过版本目标直接做 Backlog。
+1. 打开微信开发者工具，确认自动真机调试已经不再因 `subPackages` 缺字段报错。
+2. 用干净 CloudBase 数据重新跑 TASK-011 主流程：
+   - 首次进入
+   - 设置昵称
+   - 创建家庭
+   - 新增正常/临期/今天到期/已过期物品
+   - 风险确认弹窗
+   - 保存中 loading
+   - 首页列表与统计
+   - 详情
+   - 编辑
+   - 标记用完
+   - 删除
+3. 若真实联调通过，更新 TASK-011 验证结果，并准备把 TASK-011 标记为完成。
+4. TASK-011 完成后，按 `docs/releases/v0.1.md` 进入 `TASK-012 家庭切换功能`，不要跳过版本目标直接做 Backlog。
+
+## 阻塞
+- 当前无文档层面的阻塞。
+- 真实联调依赖微信开发者工具和当前 CloudBase 环境可访问。
 
 ## 关键文件
-- AGENTS.md
-- docs/product.md
-- docs/architecture.md
-- docs/page-map.md
-- docs/roadmap.md
-- docs/releases/v0.1.md
-- docs/api.md
-- docs/tasks.md
-- docs/tasks/TASK-004-family-home-anchor.md
-- docs/tasks/TASK-005-item-form-prototype.md
-- docs/tasks/TASK-006-item-detail-prototype.md
-- docs/tasks/TASK-007-multi-image-upload.md
-- docs/tasks/TASK-008-swipe-delete.md
-- docs/tasks/TASK-009-pull-to-refresh.md
-- docs/tasks/TASK-010-api-contract-validation.md
-- docs/tasks/TASK-011-wechat-cloud-backend-foundation.md
-- docs/tasks/TASK-012-family-switch.md
-- docs/tasks/TASK-013-cloud-storage-adapter.md
-- docs/tasks/TASK-014-family-invite-join.md
-- docs/tasks/TASK-015-v0-1-acceptance.md
-- docs/decisions/008-cloudbase-mcp-for-backend-deployment.md
-- docs/decisions/009-cloud-function-router.md
-- cloudfunctions/yaoguoqiApi/index.js
+- `AGENTS.md`
+- `CLAUDE.md`
+- `docs/handoff.md`
+- `docs/tasks.md`
+- `docs/tasks/TASK-011-wechat-cloud-backend-foundation.md`
+- `docs/releases/v0.1.md`
+- `docs/api.md`
+- `docs/ui.md`
+- `cloudfunctions/yaoguoqiApi/index.js`
+- `src/services/cloud/wechatCloudClient.ts`
+- `src/services/cloud/cloudHomeRepository.ts`
+- `src/pages/home/index.vue`
+- `src/pages/item-form/index.vue`
+- `src/pages/item-detail/index.vue`
 
 ## 注意事项
-- 接手前先查看 `git status`，确认不要覆盖其他 agent 的未提交变更。
-- 任何 UI 原型完成后都需要用户验收，不能由 agent 自行标记 Done。
+- 接手前先查看 `git status`，不要覆盖其他 agent 的未提交变更。
+- 任何用户可见 UI 或交互变化在标记任务完成前都需要用户验收；内部重构只需验证并记录。
+- 高影响 CloudBase 操作必须先确认环境和操作范围，操作后记录可观察结果。
+- 历史细节查 `docs/dev-log.md`，不要把长历史重新塞回 `docs/handoff.md`。

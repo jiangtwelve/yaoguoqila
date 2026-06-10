@@ -4,12 +4,63 @@ updated: 2026-06-10
 
 # Dev Log
 
-## 2026-06-10 Ignore Local Agent Tooling State
-- Goal: 按用户要求将本地 agent/tooling 产物加入 Git 忽略名单，避免误提交本机配置和工具缓存。
+## Reading Guide
+- 恢复开发时先读 `docs/handoff.md`、`docs/tasks.md` 和当前 TASK；只有需要历史原因、验证细节或用户反馈链路时，再读本文件。
+- 优先按下面索引读取相关日期段落，不要默认把整份 dev-log 放入上下文。
+- 若新增日志超过 5-8 条或出现新的长期主题，应同步更新本索引。
+
+## Index
+
+### 当前连续性与 TASK-011
+- `2026-06-10 Continuity Compacting`：新版 project continuity 规则落地，压缩 handoff 和 TASK-011。
+- `2026-06-09 WeChat DevTools Auto Device Debug Config Fix`：自动真机调试 `subPackages` 兼容修复。
+- `2026-06-09 Clean Cloud Database For Acceptance`：清空 CloudBase 业务数据，准备干净验收。
+- `2026-06-09 TASK-011 Cloud Adapter TDD And wx.cloud Migration`：cloud adapter 测试、`wx.cloud.callFunction` 迁移。
+- `2026-06-08 TASK-011 Cloud Environment Reset And Deploy`：清理旧云资源、创建新集合、部署 `yaoguoqiApi`。
+- `2026-06-08 TASK-011 Started / CloudBase MCP Prepared`：CloudBase MCP 接入和环境准备。
+
+### UI 基线、弹窗和表单体验
+- `2026-06-09 Minimal Modal Input Focus Refinement`：昵称/创建家庭弹窗回到极简大输入槽。
+- `2026-06-09 Modal Guidance And Save Loading Refinement`：临期天数高亮、保存全屏 loading。
+- `2026-06-09 Item Form Loading Interaction Lock`：表单 loading/saving 期间锁定输入。
+- `2026-06-09 Shared Glass Modal And Textarea Tap Shield`：抽取 `GlassModal`，修复保存按钮与 `textarea` 触摸竞争。
+- `2026-06-09 Risky Create Custom Glass Modal` 到 `Risky Create Modal Button Length Fix`：新增风险确认弹窗的样式、文案和小程序按钮限制修复。
+- `2026-06-09 Unified Page Skeleton Loading`、`Home Modal And Loading Polish`、`Full-Screen Loading Replaces Text Loading State`：页面级 loading 统一和弹窗体验。
+- `2026-06-07 Design Direction Refresh`、`2026-06-06 TASK-004 Design Iteration`：首页 Design Anchor 多轮方向变化。
+
+### v0.1 规划与任务队列
+- `2026-06-09 Lifecycle And Release Planning`：补充 roadmap、v0.1 release 和 TASK-012 到 TASK-015。
+- `2026-06-08 TASK-009 Accepted / TASK-010 Started` 与 `TASK-010 API Contract Validated`：下拉刷新验收和 API contract validated。
+- `2026-06-08 TASK-008 Accepted / TASK-009 Implemented`：左滑删除后进入下拉刷新。
+- `2026-06-08 TASK-007 Accepted / TASK-008 Implemented`：多图后进入左滑删除。
+- `2026-06-07 TASK-006 Accepted / TASK-007 Started`：详情页验收后进入多图。
+- `2026-06-07 TASK-005 Accepted / TASK-006 Started`：表单验收后进入详情。
+
+### 产品、架构和早期决策
+- `2026-06-08 Product Naming Update`：小程序正式名称改为「要过期」。
+- `2026-06-08 Home List Performance Direction`：大数据量列表策略暂缓到后续评估。
+- `2026-06-07 Plan Realignment`：任务队列与当前阶段重新对齐。
+- `2026-06-06 TASK-003`：项目骨架、domain models、fixtures、mock service 和首页薄页面。
+- `2026-06-06` / `Decision Update`：项目初始化、MVP 范围、技术路线、页面地图和后端路线确认。
+
+### 外部状态与 CloudBase
+- 最新可行动外部状态以 `docs/handoff.md` 为准。
+- 需要追溯 CloudBase 操作历史时，读 `2026-06-09 Clean Cloud Database For Acceptance`、`2026-06-08 TASK-011 Cloud Environment Reset And Deploy`、`2026-06-08 TASK-011 Started / CloudBase MCP Prepared`。
+
+## 2026-06-10 Continuity Compacting
+- Goal: 按新版 `agent-project-continuity` 规则压缩项目连续性文档，让接手状态更轻、更稳定。
 - Changes:
-  - 更新 `.gitignore`：新增 `.agents/`、`.claude/`、`.mcp.json`、`skills-lock.json` 忽略规则。
+  - 更新 `AGENTS.md` 和 `CLAUDE.md`：补齐稳定 `next_action` 枚举、`acceptance_status` 规则，并将文档更新规则调整为按影响范围更新。
+  - 重写 `docs/handoff.md`：只保留当前 TASK-011、下一步、外部状态、阻塞和关键文件；历史细节继续保留在本文件中。
+  - 压缩 `docs/tasks/TASK-011-wechat-cloud-backend-foundation.md`：从长流水账改为当前快照、外部状态、最新验证、剩余工作和风险。
+  - 更新 `docs/tasks.md`：保留 TASK-011 为 Current，并把摘要改为当前可执行状态。
+  - 新增 dev-log 顶部 Reading Guide 和主题索引，减少后续 agent 为查历史而加载整份日志的上下文压力。
 - Verification:
-  - `git status --short` 仅显示 `.gitignore` 修改，本地工具产物已不再作为未跟踪文件出现。
+  - `diff -q AGENTS.md CLAUDE.md` 通过，两个 agent 入口保持一致。
+  - `git diff --check` 通过。
+  - 已确认本轮只修改连续性文档，未触碰业务代码或 CloudBase。
+- Gaps:
+  - 本次只整理连续性文档，不推进微信开发者工具真实联调，不操作 CloudBase。
 
 ## 2026-06-09 Minimal Modal Input Focus Refinement
 - Goal: 按用户反馈回收设置昵称和创建家庭弹窗的信息堆叠，保持极简风格，同时让输入框本身更显眼。

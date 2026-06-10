@@ -64,9 +64,11 @@
 Supported next_action values:
 - continue_implementation
 - wait_for_user_acceptance
+- wait_for_release_acceptance
 - ask_product_question
 - fix_verification_failure
 - start_next_ready_task
+- verify_external_state
 - blocked
 
 ## User Confirmation Required
@@ -91,19 +93,27 @@ Supported next_action values:
 - 若暂时不抽象，必须在 `docs/dev-log.md` 或 `docs/handoff.md` 记录原因、风险和后续触发条件。
 
 ## Documentation Update Rule
-每次任务执行完毕后，必须更新对应文档，无论任务大小：
-1. **必须更新：**
-   - `docs/dev-log.md`：记录本次修改内容、验证结果和剩余问题。
-   - `docs/handoff.md`：更新已完成记录、当前任务状态和下一步。
-   - `docs/tasks.md`：更新任务状态（Current/Ready/Done）。
-   - 当前 active `docs/tasks/TASK-xxx.md`：补充完成内容、验收结果和备注。
-2. **按影响范围追加更新：**
-   - 影响版本目标 → 更新 `docs/roadmap.md` 和对应 `docs/releases/*.md`。
-   - 影响 API contract → 更新 `docs/api.md`。
-   - 影响架构 → 更新 `docs/architecture.md` 和 `docs/decisions/`。
-   - 影响页面结构 → 更新 `docs/page-map.md`。
-   - 影响 UI 方向 → 更新 `docs/ui.md`。
-3. **即使只是一个小修复**，也要在任务相关文档中记录完成内容、验证结果和下一步。
+项目文档是长期记忆，但不要把所有历史都塞进交接文件。按影响范围更新：
+
+1. **状态查询 / 恢复回答**
+   - 不更新文档，除非发现文档之间互相矛盾，或与当前代码状态明显不一致。
+2. **小 bug、小 UI 微调、本地验证记录**
+   - 更新 `docs/dev-log.md`。
+   - 仅当下一步、阻塞项、验收状态、任务范围或可交接状态变化时，更新 `docs/handoff.md` 或当前 TASK。
+3. **任务完成**
+   - 更新 `docs/tasks.md`、当前 active `docs/tasks/TASK-xxx.md`、`docs/dev-log.md` 和 `docs/handoff.md`。
+4. **版本 / 产品 / 架构 / API / 页面 / UI 合同变化**
+   - 更新对应 source of truth：`docs/roadmap.md`、`docs/releases/*.md`、`docs/product.md`、`docs/architecture.md`、`docs/page-map.md`、`docs/ui.md`、`docs/api.md` 或 `docs/decisions/`。
+5. **无需记录到项目开发文档的情况**
+   - 与产品行为、业务代码、构建/测试/部署流程和任务状态无关的本地工具缓存、编辑器配置、临时文件清理。
+   - 纯格式化、拼写或注释微调，且不会影响可交接状态。
+
+Structured metadata 使用稳定值：
+- task status: `ready | current | blocked | done`
+- acceptance_status: `not_required | pending | accepted | failed`
+- next_action: `continue_implementation | wait_for_user_acceptance | wait_for_release_acceptance | ask_product_question | fix_verification_failure | start_next_ready_task | verify_external_state | blocked`
+
+`docs/handoff.md` 只保留下一位 agent 接手所需的当前状态、下一步、阻塞、最新外部状态和关键文件；历史细节放入 `docs/dev-log.md`。
 
 ## UI Acceptance
 - 任何用户可见 UI 或交互变化在标记 Done 前都需要用户验收，包括按钮、布局、样式、导航、弹窗、表单、文案、页面状态和交互反馈。
