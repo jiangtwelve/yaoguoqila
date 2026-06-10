@@ -96,6 +96,10 @@ Supported next_action values:
 - 即使当前正在修 bug，也要检查问题是否来自重复实现；若重复实现已经影响维护或一致性，应优先做小范围抽象后再继续修复。
 - 若暂时不抽象，必须在 `docs/dev-log.md` 或 `docs/handoff.md` 记录原因、风险和后续触发条件。
 
+## Frontend Design Skill Rule
+- 只要任务涉及页面改动、页面设计、页面结构重组、视觉方向调整或新页面创建等场景，都必须先调用 `frontend-design` skill 来指导设计方向和实现。
+- 如果当前环境未安装 `frontend-design` skill，则使用默认前端开发流程，并在 `docs/dev-log.md` 记录 skill 不可用的情况。
+
 ## Documentation Update Rule
 项目文档是长期记忆，但不要把所有历史都塞进交接文件。按影响范围更新：
 

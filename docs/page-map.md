@@ -12,7 +12,7 @@ updated: 2026-06-06
 - Entry: 登录/授权后进入首页；若用户未设置昵称，先用首页弹窗补充；若无家庭，在首页展示空家庭状态并引导创建或加入家庭。
 - Tabbar / stack: MVP 不使用底部 Tab，以单首页作为主界面；新增、编辑、详情作为从首页进入的子页面。
 - Back behavior: 常规页面返回上一页；无上一页时回到首页。
-- Family switch: 首页显示当前家庭名称，点击家庭名称打开家庭切换。
+- Family switch: 首页显示当前家庭名称芯片，点击芯片打开家庭中枢面板，支持切换家庭和进入家庭管理。
 
 ## MVP Pages
 
@@ -28,7 +28,7 @@ updated: 2026-06-06
 
 ### 家庭首页 / families/:familyId/home
 - Purpose: 单页展示当前家庭下所有物品，并按剩余保质期排序，让用户一打开就知道哪些物品最该处理。
-- Required features: 当前家庭名称、家庭切换、搜索、按剩余保质期排序的物品列表、临期/过期状态标识、新增按钮、基础空状态、无家庭空状态、首次昵称设置弹窗、创建家庭弹窗。
+- Required features: 家庭名称芯片（可点击打开中枢面板）、家庭切换与管理、搜索、按剩余保质期排序的物品列表、临期/过期状态标识、新增按钮、基础空状态、无家庭空状态、首次昵称设置弹窗、创建家庭弹窗。
 - Primary interactions: 输入昵称、点击创建家庭、点击加入家庭/接受邀请入口、输入家庭名称、点击家庭名称切换家庭、搜索物品、点击物品进入详情、点击新增录入物品。
 - States: 正常、待设置昵称、无家庭、无物品、搜索无结果、加载中、错误、无权限。
 - Data dependencies: User, Family, Items, Item expiry status。
@@ -92,14 +92,15 @@ updated: 2026-06-06
 - Design role: Design Extension。
 
 ### 家庭切换 / families/switch
-- Purpose: 从首页切换当前家庭。
-- Required features: 家庭列表、当前家庭标识、创建新家庭入口。
-- Primary interactions: 选择家庭、打开创建家庭弹窗、返回首页。
-- States: 正常、无家庭、加载中、错误。
-- Data dependencies: Families。
-- Entry points: 点击首页家庭名称。
+- Purpose: 从首页切换当前家庭，管理家庭成员。
+- Required features: 家庭芯片入口、家庭中枢面板、家庭列表、当前家庭标识、切换家庭、创建新家庭入口、家庭管理视图（重命名、成员列表、角色标识、移除成员、退出家庭、解散家庭）。
+- Primary interactions: 点击家庭芯片打开中枢面板、选择家庭切换、管理 › 进入管理视图、重命名家庭、移除成员（管理员）、退出家庭（普通成员）、解散家庭（管理员）、创建新家庭、返回首页。
+- States: 多家庭（可切换）、单家庭（仅管理）、无家庭（首页空状态引导）、管理中、操作中、操作确认（解散/退出）、加载中、错误。
+- Data dependencies: Families, FamilyMembers, User。
+- Entry points: 点击首页家庭名称芯片。
 - Destination links: 首页、创建家庭弹窗。
 - Design role: Design Extension。
+- Notes: 成员分管理员（创建者）和普通成员，物品权限一致。邀请码和加入家庭功能归入 TASK-014 独立实现。
 
 ## Out Of Scope Pages
 - 条码/OCR 识别页。
