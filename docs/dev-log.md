@@ -1,8 +1,283 @@
 ---
-updated: 2026-06-08
+updated: 2026-06-09
 ---
 
 # Dev Log
+
+## 2026-06-09 Minimal Modal Input Focus Refinement
+- Goal: 按用户反馈回收设置昵称和创建家庭弹窗的信息堆叠，保持极简风格，同时让输入框本身更显眼。
+- Changes:
+  - 修改 `src/pages/home/index.vue`：移除设置昵称和创建家庭弹窗中的「下一步」提示、字段标签和说明 copy，只保留标题、输入框和操作按钮。
+  - 修改 `src/components/GlassModal.vue`：删除未使用的 `glass-modal-task` 与字段标签样式；将 `glass-modal-field` 调整为更高、更亮、更有边界和阴影层次的大输入槽。
+  - 更新 `docs/ui.md` 和 `docs/page-map.md`：将弹窗规则从“增加提示文本”修正为“减少文本、突出输入框”。
+- Verification:
+  - `pnpm typecheck` 通过。
+  - `pnpm test` 通过（4 个文件 19 个测试）。
+  - `pnpm build:mp-weixin` 通过，仅有 Sass legacy JS API 警告。
+  - 已检查 `dist/build/mp-weixin/pages/home/index.wxml`：弹窗不再包含「下一步」提示和字段标签，仅保留显眼输入槽。
+
+## 2026-06-09 WeChat DevTools Auto Device Debug Config Fix
+- Goal: 修复微信开发者工具自动真机调试时报 `TypeError: Cannot read property 'subPackages' of undefined` 的编译异常。
+- Root Cause:
+  - 当前项目没有分包，`src/pages.json` 未显式声明 `subPackages`；`uni build -p mp-weixin` 生成的 `app.json` 也没有该字段。微信开发者工具 `2.01.2510290` 的自动真机调试链路会读取 `subPackages`，在无字段时触发异常。
+- Changes:
+  - 修改 `src/pages.json`：新增空分包声明 `"subPackages": []`，让小程序产物 `dist/build/mp-weixin/app.json` 稳定包含该字段。
+- Verification:
+  - `pnpm build:mp-weixin` 通过，仅有 Sass legacy JS API 警告。
+  - 已检查 `dist/build/mp-weixin/app.json` 包含 `"subPackages": []`。
+  - `pnpm typecheck` 通过。
+  - `pnpm test` 通过（4 个文件 19 个测试）。
+
+## 2026-06-09 Modal Guidance And Save Loading Refinement
+- Goal: 按用户反馈优化设置昵称、创建家庭、临期提醒和新增/编辑保存 loading，让用户更快识别当前要做什么，并让保存中状态更明显。
+- Changes:
+  - 修改 `src/components/GlassModal.vue`：补充统一的 `glass-modal-task` 动作提示、字段标签和更明显的输入槽样式，让弹窗说明文案与输入区域有清晰层级。
+  - 修改 `src/pages/home/index.vue`：设置昵称弹窗新增「下一步 / 填写你的昵称」提示、昵称字段标签和示例占位；创建家庭弹窗新增「下一步 / 给这个家庭起个名字」提示、家庭名称字段标签和示例占位。
+  - 修改 `src/pages/item-form/index.vue`：临期提醒文案缩短为「还有 x 天到期，确认添加吗？」，并将剩余天数用橙色胶囊高亮；今天到期与已过期文案同步缩短。
+  - 修改 `src/pages/item-form/index.vue`：保存中从按钮内弱 loading 升级为全屏轻玻璃 `cover-view` loading，展示 spinner、保存标题和同步说明，同时覆盖原生输入层与底部保存按钮。
+  - 更新 `docs/ui.md` 和 `docs/page-map.md`：同步弹窗输入层级、风险提醒文案和保存全屏 loading 规则。
+- Verification:
+  - `pnpm typecheck` 通过。
+  - `pnpm test` 通过（4 个文件 19 个测试）。
+  - `pnpm build:mp-weixin` 通过，仅有 Sass legacy JS API 警告。
+  - 已检查 `dist/build/mp-weixin/pages/home/index.wxml`：昵称/创建家庭弹窗包含 `glass-modal-task`、字段标签和示例占位。
+  - 已检查 `dist/build/mp-weixin/pages/item-form/index.wxml`：保存中包含 `save-loading-backdrop` 全屏 `cover-view`，风险确认包含 `risk-days` 高亮天数。
+  - 修改完成后已按用户要求再次清空真实 CloudBase 业务集合；清理前计数为 `users=1`、`families=1`、`items=3`、`locations=2`、`familyMembers=0`、`notificationLogs=0`，清理后六个集合均为 0。
+- Next:
+  - 在微信开发者工具中重新验收首次昵称、创建家庭、临期确认和保存 loading。
+
+## 2026-06-09 Clean Cloud Database For Acceptance
+- Goal: 按用户要求清空真实 CloudBase 数据库，重新开始 TASK-011 微信开发者工具验收测试。
+- Changes:
+  - 通过 CloudBase CLI 操作环境 `cloud1-d8gr12cmd6578bfd0`，清空业务集合 `users`、`families`、`items`、`locations`、`familyMembers`、`notificationLogs`。
+  - 清理前复核发现 `users` 已重新产生 1 条记录，其余集合为 0；本次清理删除 `users` 1 条记录，其余集合无残留数据。
+  - 保留现有云函数与集合结构不变，仅清空业务数据，便于从首次进入、设置昵称、创建家庭开始重新验收。
+- Verification:
+  - 清理后再次计数确认六个业务集合均为 0。
+  - `pnpm build:mp-weixin` 通过，已刷新 `dist/build/mp-weixin`；仅有 Sass legacy JS API 警告。
+  - 本次未修改业务代码，云函数 `yaoguoqiApi` 沿用上一轮 TASK-011 验证状态。
+- Next:
+  - 在微信开发者工具中从干净数据重新验收设置昵称、创建家庭、新增物品、风险确认弹窗、详情、编辑、标记用完和删除主流程。
+
+## 2026-06-09 Item Form Loading Interaction Lock
+- Goal: 按用户反馈，在表单 loading/saving 期间禁用其他页面操作，避免新增物品保存中继续修改表单。
+- Changes:
+  - 修改 `src/pages/item-form/index.vue`：新增 `formLocked` 状态，表单加载中或保存中锁定图片上传/删除、名称、日期 picker、保质期输入、位置、历史位置和备注输入。
+  - 修改 `src/pages/item-form/index.vue`：相关事件处理函数在锁定时早退，避免只靠视觉 disabled。
+  - 修改 `src/pages/item-form/index.vue`：保存中增加透明 `cover-view` 触摸屏蔽层，拦截小程序原生 `textarea` 等组件的触摸穿透；保存按钮保持保存中状态显示。
+  - 更新 `docs/ui.md` 和 `docs/page-map.md`：记录表单 loading/saving 期间必须锁定其他表单操作。
+- Verification:
+  - `pnpm typecheck` 通过。
+  - `pnpm test` 通过（4 个文件 19 个测试）。
+  - `pnpm build:mp-weixin` 通过，仅有 Sass legacy API 警告。
+  - 已检查 `dist/build/mp-weixin/pages/item-form/index.wxml`：input、textarea、picker、button 均有 `disabled` 绑定，保存中触摸屏蔽层编译为 `cover-view` + `catchtap` / `catchtouchmove`。
+  - `git diff --check` 通过；`AGENTS.md` 与 `CLAUDE.md` 内容一致。
+
+## 2026-06-09 Component Extraction Rule Recorded
+- Goal: 按用户反馈，将“同类 UI 明显重复时应主动抽组件”的规则记录到项目长期规范中。
+- Changes:
+  - 更新 `AGENTS.md` 和 `CLAUDE.md`：新增 Component Extraction Rule，要求同类 UI、交互流程、状态处理或样式结构在 2 处及以上出现，且需要统一微调或保持同一视觉语言时，agent 应主动抽取共享组件、组合函数或样式抽象。
+  - 更新 `docs/ui.md`：补充 UI 层面的组件抽取判断标准，并要求暂缓抽取时记录原因和后续触发条件。
+  - 更新 TASK-011 相关任务与交接文档：记录该规则已补充，后续类似弹窗和重复 UI 应主动组件化。
+- Verification:
+  - `diff -q AGENTS.md CLAUDE.md` 通过，两个 agent 指令文件内容一致。
+  - `git diff --check` 通过。
+
+## 2026-06-09 Shared Glass Modal And Textarea Tap Shield
+- Goal: 按用户反馈，将设置昵称、创建家庭和新增风险提醒弹窗统一为一套组件，并修复保存按钮覆盖备注 `textarea` 时可能同时触发键盘的问题。
+- Changes:
+  - 新增 `src/components/GlassModal.vue`：抽取共享毛玻璃弹窗组件，支持主题标识、标题、说明文案、正文居中、主/次按钮、禁用态和遮罩点击关闭。
+  - 修改 `src/pages/home/index.vue`：设置昵称和创建家庭弹窗改用 `GlassModal`，移除旧 `.modal-*` 页面样式。
+  - 修改 `src/pages/item-form/index.vue`：新增风险确认改用 `GlassModal`，显示标题「提醒」，正文居中，按钮保持 `取消` / `确认`；弹窗遮罩改薄，避免过度遮挡背后页面。
+  - 修改 `src/pages/item-form/index.vue`：固定保存按钮改为 `cover-view` + `catchtap` 产物，保存入口主动 `hideKeyboard()`，风险确认打开时隐藏保存覆盖层，避免与原生 `textarea` 触摸/焦点竞争。
+  - 更新 `docs/ui.md` 和 `docs/page-map.md`：记录后续类似弹窗统一使用 `GlassModal`，以及保存按钮与原生 textarea 的小程序交互约束。
+- Verification:
+  - `pnpm typecheck` 通过。
+  - `pnpm test` 通过（4 个文件 19 个测试）。
+  - `pnpm build:mp-weixin` 通过，仅有 Sass legacy API 警告。
+  - 已检查 `dist/build/mp-weixin/pages/item-form/index.wxml`：保存按钮编译为 `cover-view` + `catchtap`，风险确认打开时由 `wx:if` 隐藏。
+  - 已检查 `dist/build/mp-weixin/pages/item-form/index.js`：保存入口包含 `hideKeyboard()`，新增风险确认路径不再调用 `showModal`。
+  - `git diff --check` 通过；`AGENTS.md` 与 `CLAUDE.md` 内容一致。
+
+## 2026-06-09 Risky Create Custom Glass Modal
+- Goal: 按用户反馈，将新增临期/已过期物品确认弹窗设计为与首页设置昵称弹窗一致的毛玻璃样式。
+- Changes:
+  - 修改 `src/pages/item-form/index.vue`：移除新增风险确认对 `uni.showModal` 的依赖，改为页面内自定义居中毛玻璃弹窗。
+  - 自定义弹窗复用设置昵称弹窗的遮罩、玻璃卡片、圆角、阴影和 `取消` / `确认` 双按钮视觉语言；保留无标题、只展示提示文本和功能按钮的交互。
+  - 更新 `docs/ui.md` 和 `docs/page-map.md`：记录新增风险确认使用自定义玻璃弹窗。
+- Verification:
+  - `pnpm typecheck` 通过。
+  - `pnpm test` 通过（4 个文件 19 个测试）。
+  - `pnpm build:mp-weixin` 通过，仅有 Sass legacy API 警告。
+  - 已检查 `dist/build/mp-weixin/pages/item-form/index.js` 和 `.wxml`：风险确认链路不再调用 `showModal`，构建产物包含 `modal-backdrop`、玻璃弹窗结构和 `取消` / `确认` 按钮。
+
+## 2026-06-09 Risky Create Modal Copy Refinement
+- Goal: 按用户反馈优化新增临期/已过期物品二次确认弹窗，让提示文本更直观。
+- Changes:
+  - 修改 `src/pages/item-form/index.vue`：新增风险确认弹窗不再传标题，只展示提示文本和操作按钮。
+  - 临期文案改为「该物品还有 x 天就要过期了，确定添加吗？」；今天到期文案为「该物品今天就要过期了，确定添加吗？」；已过期文案为「该物品已过期，确定添加吗？」。
+  - 弹窗按钮改为 `取消` / `确认`，同时保持小程序 `showModal` 按钮文案不超过 4 个字符。
+  - 更新 `docs/ui.md`：同步新增风险确认弹窗文案、无标题和按钮规则。
+- Verification:
+  - `pnpm typecheck` 通过。
+  - `pnpm test` 通过（4 个文件 19 个测试）。
+  - `pnpm build:mp-weixin` 通过，仅有 Sass legacy API 警告。
+  - 已检查 `dist/build/mp-weixin/pages/item-form/index.js`：确认弹窗不传 `title`，按钮为 `取消` / `确认`，内容使用新的临期/今天到期/已过期提示文案。
+
+## 2026-06-09 Risky Create Modal Button Length Fix
+- Goal: 彻底检查新增临期物品保存确认链路，修复点击保存后提示“确认弹窗打开失败，请重试”的问题。
+- Root Cause:
+  - 微信小程序 `showModal` 的 `cancelText` / `confirmText` 按钮文案最多 4 个字符；此前 `cancelText: '再检查一下'` 为 5 个字符，导致 `uni.showModal` 在小程序端直接进入 `fail`。
+- Changes:
+  - 修改 `src/pages/item-form/index.vue`：新增确认弹窗按钮文案改为 `再检查` / `仍保存`，并集中到 `riskyCreateModalActions`，旁注小程序按钮文案长度限制。
+  - 更新 `docs/ui.md`：记录小程序原生确认弹窗按钮文案必须控制在 4 个字符以内。
+- Verification:
+  - `pnpm typecheck` 通过。
+  - `pnpm test` 通过（4 个文件 19 个测试）。
+  - `pnpm build:mp-weixin` 通过，仅有 Sass legacy API 警告。
+  - 已检查 `dist/build/mp-weixin/pages/item-form/index.js`：旧文案 `再检查一下` / `仍然保存` 已不存在，构建产物使用 `再检查` / `仍保存`。
+  - 已全局检查 `src/pages` 中 `showModal` 的按钮文案，除新增确认外仅有删除确认 `删除`。
+
+## 2026-06-09 Item Form Save Tap Feedback Fix
+- Goal: 修复新增临期物品点击保存后无任何反应的问题，避免保存入口被按钮原生禁用或早退逻辑静默吞掉。
+- Changes:
+  - 修改 `src/pages/item-form/index.vue`：保存按钮只有在保存中才使用原生 `disabled`，表单未准备、无家庭、缺名称、缺日期或保质期无效时，点击会给出 toast 和表单错误提示。
+  - 修改 `src/pages/item-form/index.vue`：满足保存条件时仍进入新增临期/今天到期/已过期二次确认；若确认弹窗打开失败，会提示用户重试，而不是静默取消。
+  - 更新 `docs/ui.md`：记录保存按钮不可保存状态必须给出明确反馈，不能静默无响应。
+- Verification:
+  - `pnpm typecheck` 通过。
+  - `pnpm test` 通过（4 个文件 19 个测试）。
+  - `pnpm build:mp-weixin` 通过，仅有 Sass legacy API 警告。
+  - 已检查 `dist/build/mp-weixin/pages/item-form/index.wxml`：保存按钮原生 `disabled` 仅绑定保存中状态，点击事件仍保留。
+
+## 2026-06-09 Mini Program Risky Create Confirmation Runtime Fix
+- Goal: 修复微信开发者工具中新增临期物品点击保存时报 `undefined is not an object (evaluating 'a.getItemStatus')` 的问题。
+- Changes:
+  - 修改 `src/pages/item-form/index.vue`：新增/编辑表单页不再在运行时依赖 `@/domain/expiry` 的导出函数，改为页面内稳定计算预计到期日期和临期/今天到期/已过期状态。
+  - 保持新增临期、今天到期、已过期物品保存前二次确认的交互和文案不变。
+- Verification:
+  - `pnpm typecheck` 通过。
+  - `pnpm test` 通过（4 个文件 19 个测试）。
+  - `pnpm build:mp-weixin` 通过，仅有 Sass legacy API 警告。
+  - 已检查 `dist/build/mp-weixin/pages/item-form/index.js`：表单页构建产物不再引用 `../../domain/expiry.js`，保存确认路径不再出现 `getItemStatus` 外部调用。
+
+## 2026-06-09 Expiring Item Create Confirmation And Shelf Placeholder Fix
+- Goal: 按用户反馈，新增临期/今天到期/已过期物品时增加二次确认，并修复「生产日期 + 保质期」中“填写”占位文本首次打开时向右偏移的问题。
+- Changes:
+  - 修改 `src/pages/item-form/index.vue`：新增物品保存前计算最终 `expiresAt` 的状态，若为 `expiring`、`expires_today` 或 `expired`，先弹出确认框；用户取消时不进入保存中状态，也不调用 `createItem`。
+  - 修改 `src/pages/item-form/index.vue`：保质期数值输入不再使用原生 input placeholder，而是使用稳定的 `.shelf-placeholder` 文本层，避免原生输入框在首次布局时重排偏移。
+  - 更新 `docs/ui.md` 和 `docs/page-map.md`：记录新增临期/过期二次确认和保质期占位文本布局规则。
+- Verification:
+  - `pnpm test` 通过（4 个文件 19 个测试）。
+  - `pnpm typecheck` 通过。
+  - `pnpm build:mp-weixin` 通过。
+  - H5 预览核验：新增页首次打开和刷新后，“填写”占位文本位置稳定；填写已过期日期 `2020-01-01` 后点击保存，会出现“这个物品已过期”二次确认，未直接创建。
+
+## 2026-06-09 New Item Form Loading And Disabled Button Refinement
+- Goal: 按用户反馈优化新增/编辑页保存按钮禁用态，并取消新增表单进入时的骨架屏。
+- Changes:
+  - 修改 `src/pages/item-form/index.vue`：新增模式不再显示表单骨架屏，直接展示空白录入表单；编辑模式仍保留骨架屏用于等待已有物品回显。
+  - 修改 `src/pages/item-form/index.vue`：保存按钮禁用态改为去饱和灰玻璃、弱阴影和灰色文字，避免看起来像可点击的浅色主按钮。
+  - 更新 `docs/ui.md`：同步记录新增表单不显示骨架屏，以及禁用保存按钮的视觉规则。
+- Verification:
+  - `pnpm test` 通过（4 个文件 19 个测试）。
+  - `pnpm typecheck` 通过。
+  - `pnpm build:mp-weixin` 通过。
+
+## 2026-06-09 UI Acceptance And Save Button State Review
+- Goal: 按用户确认更新 UI 验收状态，审查 Claude Code 今日 TASK-011 未提交改动，并优化新增/编辑页保存按钮禁用和保存中状态。
+- Review:
+  - 已检查 TASK-011 未提交代码、测试、配置和文档改动。
+  - 发现 `src/pages/item-form/index.vue` 曾让新增页在 `getItemFormOptions()` 完成前渲染表单，导致用户可能看到可填写但无法保存的页面；已修复为加载期间展示表单骨架屏。
+  - `.env.production`、`.mcp.json`、`.claude/settings.local.json` 和 `.agents` 未发现密钥；`.agents` 是约 1MB 的 CloudBase skill 文档包，提交前需确认是否作为项目工具资产入库。
+- Changes:
+  - 更新 `docs/ui.md`：将 UI 基线标记为已验收，并记录后续样式微调必须同步更新 UI 文档。
+  - 修改 `src/pages/item-form/index.vue`：新增页和编辑页都在表单选项加载期间展示骨架屏。
+  - 修改 `src/pages/item-form/index.vue`：保存按钮区分可用、禁用、保存中三种状态；禁用态保持可见，保存中使用更明确的石墨青玻璃底和轻微流光反馈。
+- Verification:
+  - `pnpm test` 通过（4 个文件 19 个测试）。
+  - `pnpm typecheck` 通过。
+  - `pnpm build:mp-weixin` 通过。
+- Remaining Risks:
+  - TASK-011 真实微信开发者工具联调尚未完成。
+
+## 2026-06-09 Unified Page Skeleton Loading
+- Goal: 按用户反馈统一所有页面 loading 效果，避免空白页中间单独 loading 图标。
+- Changes:
+  - 修改 `src/pages/home/index.vue`：将首页初始加载从全屏蒙版 loading 改为 dashboard/search/list 结构骨架屏。
+  - 修改 `src/pages/item-detail/index.vue`：将详情页「正在查看」文字 loading 改为图片、标题、到期日、信息面板骨架屏。
+  - 修改 `src/pages/item-form/index.vue`：将新增/编辑页「正在准备」文字 loading 改为图片区、输入字段、日期模块和位置字段骨架屏。
+  - 更新 `docs/ui.md`：明确页面级初始加载统一使用贴近真实结构的骨架屏，短操作反馈才使用 toast、顶部轻浮层或按钮状态。
+- Verification:
+  - `pnpm test` 通过（4 个文件 19 个测试）。
+  - `pnpm typecheck` 通过。
+  - `pnpm build:mp-weixin` 通过。
+- Remaining Risks:
+  - 该 UI 调整需要用户在微信开发者工具中视觉验收。
+
+## 2026-06-09 Home Modal And Loading Polish
+- Goal: 按用户反馈重新设计首页设置昵称、创建家庭弹窗，并将空白页 loading 改为全屏蒙版弹窗 loading。
+- Changes:
+  - 修改 `src/pages/home/index.vue`：设置昵称弹窗增加标题组、主题标识、说明文案、玻璃输入框和更明确的主按钮文案，使其与当前流光毛玻璃首页风格一致。
+  - 修改 `src/pages/home/index.vue`：创建家庭弹窗同步使用同一套玻璃弹窗结构，保留取消/创建操作。
+  - 修改 `src/pages/home/index.vue`：将 `full-screen-loader` 改为 `loading-backdrop` + `loading-card`，使用全屏蒙版、居中玻璃加载卡片、spinner 和加载说明，避免空白页中间单独 loading 图标的体验。
+- Verification:
+  - `pnpm test` 通过（4 个文件 19 个测试）。
+  - `pnpm typecheck` 通过。
+  - `pnpm build:mp-weixin` 通过。
+- Remaining Risks:
+  - 该 UI 调整需要用户在微信开发者工具中视觉验收。
+- Superseded:
+  - 页面级 loading 已在后续 `Unified Page Skeleton Loading` 中统一改为骨架屏；不再采用全屏蒙版 spinner 作为页面初始加载。
+
+## 2026-06-09 Full-Screen Loading Replaces Text Loading State
+- Goal: 将首页"正在整理"文字加载状态替换为全屏 spinner loading，提升加载体验。
+- Changes:
+  - 修改 `src/pages/home/index.vue`：将 `v-if="loading && !needsProfileName"` 区域从 `quiet-state loading-state` + 点状动画 + "正在整理"文字，改为 `full-screen-loader` + `loader-ring` spinner。
+  - 样式：全屏覆盖页面，居中旋转 ring，背景继承首页渐变色；ring 使用项目主色 `#4f7f78`。
+  - 移除 `.loading-state`、`.loading-dots`、`.dot` 和 `@keyframes dot-bounce` 样式。
+- Verification:
+  - `pnpm typecheck` 通过。
+  - `pnpm test` 通过（19 个测试）。
+  - `VITE_USE_MOCK=false pnpm build:mp-weixin` 通过。
+- Note: UI 变更需用户验收。
+
+## 2026-06-09 wx Runtime Safety And Documentation Update Rule
+- Goal: 修复 wx 运行时判断风险，补充项目文档更新规则。
+- Changes:
+  - 修改 `src/services/cloud/wechatCloudClient.ts`：将 `!wx` 直接引用改为 `typeof wx === 'undefined'` 安全判断，避免非微信运行时 ReferenceError；`ensureCloudInit` 同步添加 `typeof wx === 'undefined' || !wx.cloud` 防护。
+  - 修改 `src/services/cloud/wechatCloudClient.test.ts`：新增 3 个测试验证 wx 不可用、wx.cloud 缺失、wx.cloud.callFunction 缺失时抛出预期错误；重写测试文件结构修复插入位置问题。测试从 4 个增至 7 个。
+  - 修改 `AGENTS.md` 和 `CLAUDE.md`：新增 `Documentation Update Rule` 章节，明确每次任务完成后必须更新的文档清单和按影响范围追加更新的规则。两个文件内容保持一致。
+- Verification:
+  - `pnpm typecheck` 通过。
+  - `pnpm test` 通过（4 个文件 19 个测试）。
+  - `pnpm build:mp-weixin` 通过。
+- Remaining Risks:
+  - TASK-011 真实联调尚未完成，需用户在微信开发者工具中验收主流程。
+
+## 2026-06-09 TASK-011 Cloud Adapter TDD And wx.cloud Migration
+- Goal: 为 cloud adapter 增加 Vitest 测试，修复 uni-app CLI 项目无法使用 uniCloud 的问题，并改善首页弹窗交互。
+- Changes:
+  - 新增 `src/services/cloud/wechatCloudClient.test.ts`（4 个测试）：验证 wx.cloud.callFunction 调用、初始化、错误处理和 null 返回。
+  - 新增 `src/services/cloud/cloudHomeRepository.test.ts`（7 个测试）：验证 action/payload 映射。
+  - 新增 `src/services/adapters/homeRepository.test.ts`（2 个测试）：验证 VITE_USE_MOCK=false 切换分支。
+  - 修改 `src/services/cloud/wechatCloudClient.ts`：从 `uniCloud.callFunction` 改为 `wx.cloud.callFunction`，添加 `declare const wx` 类型声明、自动 `wx.cloud.init()` 和 `resetCloudInit()` 导出。
+  - 修改 `src/services/adapters/homeRepository.ts`：提取 `createHomeRepository(useMockEnv)` 工厂函数。
+  - 修改 `vitest.config.ts`：改用 `fileURLToPath` 修复中文路径 alias 解析。
+  - 修改 `src/manifest.json`：写入小程序 appid `wx494b5e7688cd2848`。
+  - 修改 `src/pages/home/index.vue`：
+    - 设置昵称弹窗添加 `v-model="profileNameInput"` 和 `@click="saveProfile"` 事件处理。
+    - 创建家庭弹窗添加 `v-model="familyNameInput"` 和 `@click="saveFamily"` 事件处理。
+    - 弹窗从底部改为居中显示（`align-items: center` + `max-width: 540rpx`）。
+    - 首次加载空状态改为点状动画，且 `needsProfileName` 为 true 时不再显示空白加载态。
+  - 更新 `docs/handoff.md`、`docs/tasks.md` 和 `docs/dev-log.md`。
+- Verification:
+  - `pnpm typecheck` 通过。
+  - `pnpm test` 通过（4 个文件 16 个测试）。
+  - `VITE_USE_MOCK=false pnpm build:mp-weixin` 通过。
+- Known Issues:
+  - 微信开发者工具真实联调尚未完成，需用户在开发者工具中验收主流程。
+  - 弹窗居中和交互修复属于 UI 变更，需用户验收。
 
 ## 2026-06-09 Lifecycle And Release Planning
 - Goal: 根据用户更新后的 `agent-project-continuity` lifecycle/version control 规则，补齐项目版本目标和 release 级文档。

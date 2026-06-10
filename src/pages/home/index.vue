@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref } from 'vue';
 import { onPullDownRefresh, onShow } from '@dcloudio/uni-app';
+import GlassModal from '@/components/GlassModal.vue';
 import type { FamilyHome, Item } from '@/domain/models';
 import { daysUntil } from '@/domain/expiry';
-import { deleteItem, getFamilyHome, searchItems } from '@/services/homeService';
+import { deleteItem, getFamilyHome, searchItems, updateProfile, createFamily } from '@/services/homeService';
 import { getNavigationSafeArea } from '@/utils/navigationSafeArea';
 import { consumeHomeRefreshRequest } from '@/utils/pageRefresh';
 import { MOCK_PULL_DOWN_REFRESH_FAILURE, waitForFailedRefreshIndicator, waitForMinimumRefreshIndicator } from '@/utils/pullDownRefresh';
@@ -14,9 +15,10 @@ const loading = ref(true);
 const errorMessage = ref('');
 const search = ref('');
 const showCreateFamily = ref(false);
-const navTopPx = ref(24);
-const navHeightPx = ref(40);
-const capsuleReservePx = ref(118);
+const initialSafeArea = getNavigationSafeArea();
+const navTopPx = ref(initialSafeArea.navTopPx);
+const navHeightPx = ref(initialSafeArea.navHeightPx);
+const capsuleReservePx = ref(initialSafeArea.capsuleReservePx);
 const home = ref<FamilyHome | null>(null);
 const visibleItems = ref<Item[]>([]);
 const loadedOnce = ref(false);
@@ -29,6 +31,10 @@ const swipeOffsetPx = ref(0);
 const deleteWidthPx = ref(76);
 const suppressNextTap = ref(false);
 const deletingItemId = ref('');
+const profileNameInput = ref('');
+const savingProfile = ref(false);
+const familyNameInput = ref('');
+const savingFamily = ref(false);
 
 const hasFamily = computed(() => Boolean(home.value?.currentFamily));
 const needsProfileName = computed(() => Boolean(home.value && !home.value.user.hasSetDisplayName));
@@ -328,6 +334,50 @@ function goToItemDetail(item: Item) {
     url: `/pages/item-detail/index?id=${item.id}`
   });
 }
+
+async function saveProfile() {
+  const name = profileNameInput.value.trim();
+  if (!name || savingProfile.value) return;
+
+  savingProfile.value = true;
+  try {
+    const user = await updateProfile({ displayName: name });
+    if (home.value) {
+      home.value = { ...home.value, user };
+    }
+    void uni.showToast({ title: '昵称已设置', icon: 'success' });
+  } catch (error) {
+    void uni.showToast({ title: error instanceof Error ? error.message : '设置失败', icon: 'none' });
+  } finally {
+    savingProfile.value = false;
+  }
+}
+
+async function saveFamily() {
+  const name = familyNameInput.value.trim();
+  if (!name || savingFamily.value) return;
+
+  savingFamily.value = true;
+  try {
+    const family = await createFamily({ name });
+    if (home.value) {
+      home.value = {
+        ...home.value,
+        currentFamily: family,
+        families: [...home.value.families, family],
+        items: [],
+        locations: []
+      };
+    }
+    showCreateFamily.value = false;
+    familyNameInput.value = '';
+    void uni.showToast({ title: '家庭已创建', icon: 'success' });
+  } catch (error) {
+    void uni.showToast({ title: error instanceof Error ? error.message : '创建失败', icon: 'none' });
+  } finally {
+    savingFamily.value = false;
+  }
+}
 </script>
 
 <template>
@@ -353,9 +403,32 @@ function goToItemDetail(item: Item) {
     </view>
 
     <view class="shell" :style="shellStyle">
-      <view v-if="loading" class="quiet-state">
-        <text class="state-title">正在整理</text>
-        <text class="state-copy">稍等一下</text>
+      <view v-if="loading && !needsProfileName" class="home-skeleton" aria-label="加载中">
+        <view class="skeleton-dashboard skeleton-surface">
+          <view class="skeleton-copy">
+            <view class="skeleton-line tiny"></view>
+            <view class="skeleton-line title"></view>
+            <view class="skeleton-line medium"></view>
+          </view>
+          <view class="skeleton-meter"></view>
+          <view class="skeleton-metrics">
+            <view class="skeleton-chip"></view>
+            <view class="skeleton-chip"></view>
+          </view>
+        </view>
+
+        <view class="skeleton-search skeleton-surface"></view>
+
+        <view class="skeleton-list skeleton-surface">
+          <view v-for="index in 5" :key="index" class="skeleton-item">
+            <view class="skeleton-thumb"></view>
+            <view class="skeleton-item-copy">
+              <view class="skeleton-line name"></view>
+              <view class="skeleton-line meta"></view>
+            </view>
+            <view class="skeleton-pill"></view>
+          </view>
+        </view>
       </view>
 
       <view v-else-if="errorMessage" class="quiet-state error">
@@ -457,24 +530,36 @@ function goToItemDetail(item: Item) {
 
     <button v-if="hasFamily" class="add-button floating-add" aria-label="新增物品" @click="goToNewItem">＋</button>
 
-    <view v-if="needsProfileName" class="modal-backdrop">
-      <view class="modal">
-        <text class="modal-title">设置昵称</text>
-        <input class="modal-input" placeholder="你的昵称" placeholder-class="search-placeholder" />
-        <button class="primary-action modal-action">保存</button>
+    <GlassModal
+      :show="needsProfileName"
+      symbol="你"
+      kicker="第一次见面"
+      title="设置昵称"
+      :primary-text="savingProfile ? '保存中' : '保存昵称'"
+      :primary-disabled="!profileNameInput.trim() || savingProfile"
+      @primary="saveProfile"
+    >
+      <view class="glass-modal-field">
+        <input class="glass-modal-input" v-model="profileNameInput" placeholder="你的昵称" placeholder-class="glass-modal-placeholder" :focus="needsProfileName" />
       </view>
-    </view>
+    </GlassModal>
 
-    <view v-if="showCreateFamily" class="modal-backdrop">
-      <view class="modal">
-        <text class="modal-title">创建家庭</text>
-        <input class="modal-input" placeholder="家庭名称" placeholder-class="search-placeholder" />
-        <view class="modal-actions">
-          <button class="secondary-action" @click="showCreateFamily = false">取消</button>
-          <button class="primary-action">创建</button>
-        </view>
+    <GlassModal
+      :show="showCreateFamily"
+      symbol="家"
+      symbol-tone="family"
+      kicker="新的收纳空间"
+      title="创建家庭"
+      secondary-text="取消"
+      :primary-text="savingFamily ? '创建中' : '创建'"
+      :primary-disabled="!familyNameInput.trim() || savingFamily"
+      @secondary="showCreateFamily = false"
+      @primary="saveFamily"
+    >
+      <view class="glass-modal-field">
+        <input class="glass-modal-input" v-model="familyNameInput" placeholder="家庭名称" placeholder-class="glass-modal-placeholder" />
       </view>
-    </view>
+    </GlassModal>
   </view>
 </template>
 
@@ -866,8 +951,7 @@ function goToItemDetail(item: Item) {
   line-height: 1.55;
 }
 
-.state-actions,
-.modal-actions {
+.state-actions {
   display: flex;
   gap: 18rpx;
   margin-top: 30rpx;
@@ -1097,49 +1181,158 @@ function goToItemDetail(item: Item) {
   color: #ff9500;
 }
 
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 20;
+.home-skeleton {
   display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  padding: 32rpx;
-  background: rgba(22, 31, 42, 0.26);
-  backdrop-filter: blur(18rpx);
-  -webkit-backdrop-filter: blur(18rpx);
+  flex-direction: column;
+  gap: 28rpx;
+  margin-top: 18rpx;
+}
+
+.skeleton-surface {
+  border: 1rpx solid rgba(255, 255, 255, 0.62);
+  background: rgba(255, 255, 255, 0.34);
+  box-shadow: 0 26rpx 58rpx rgba(45, 74, 110, 0.09), inset 0 1rpx 0 rgba(255, 255, 255, 0.76);
+  backdrop-filter: blur(28rpx);
+  -webkit-backdrop-filter: blur(28rpx);
   box-sizing: border-box;
 }
 
-.modal {
-  width: 100%;
-  padding: 44rpx 36rpx 36rpx;
-  border: 1rpx solid rgba(255, 255, 255, 0.66);
-  border-radius: 32rpx;
-  background: rgba(255, 255, 255, 0.74);
-  box-shadow: 0 30rpx 68rpx rgba(22, 31, 42, 0.18);
-  backdrop-filter: blur(34rpx);
-  -webkit-backdrop-filter: blur(34rpx);
+.skeleton-dashboard {
+  position: relative;
+  min-height: 314rpx;
+  padding: 34rpx;
+  border-radius: 38rpx;
+  overflow: hidden;
+}
+
+.skeleton-copy {
+  width: 64%;
+}
+
+.skeleton-line,
+.skeleton-meter,
+.skeleton-chip,
+.skeleton-search,
+.skeleton-thumb,
+.skeleton-pill {
+  position: relative;
+  overflow: hidden;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.54);
+}
+
+.skeleton-line::after,
+.skeleton-meter::after,
+.skeleton-chip::after,
+.skeleton-search::after,
+.skeleton-thumb::after,
+.skeleton-pill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0.72) 48%, transparent 100%);
+  transform: translateX(-100%);
+  animation: skeleton-shimmer 1.45s ease-in-out infinite;
+}
+
+.skeleton-line.tiny {
+  width: 128rpx;
+  height: 24rpx;
+}
+
+.skeleton-line.title {
+  width: 246rpx;
+  height: 58rpx;
+  margin-top: 20rpx;
+  border-radius: 20rpx;
+}
+
+.skeleton-line.medium {
+  width: 320rpx;
+  height: 28rpx;
+  margin-top: 18rpx;
+}
+
+.skeleton-meter {
+  position: absolute;
+  top: 34rpx;
+  right: 34rpx;
+  width: 116rpx;
+  height: 108rpx;
+  border-radius: 28rpx;
+}
+
+.skeleton-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16rpx;
+  margin-top: 54rpx;
+}
+
+.skeleton-chip {
+  height: 78rpx;
+  border-radius: 28rpx;
+}
+
+.skeleton-search {
+  height: 88rpx;
+  border-radius: 28rpx;
+}
+
+.skeleton-list {
+  border-radius: 34rpx;
+  overflow: hidden;
+}
+
+.skeleton-item {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  min-height: 142rpx;
+  padding: 22rpx 24rpx;
+  border-bottom: 1rpx solid rgba(255, 255, 255, 0.54);
+  background: rgba(250, 252, 255, 0.58);
   box-sizing: border-box;
 }
 
-.modal-title {
-  display: block;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", sans-serif;
-  font-size: 40rpx;
-  font-weight: 600;
+.skeleton-item:last-child {
+  border-bottom: 0;
 }
 
-.modal-input {
-  height: 92rpx;
-  margin-top: 28rpx;
-  border-bottom: 1rpx solid rgba(16, 20, 24, 0.12);
-  color: #101418;
-  font-size: 30rpx;
+.skeleton-thumb {
+  flex: 0 0 auto;
+  width: 76rpx;
+  height: 76rpx;
+  border-radius: 18rpx;
 }
 
-.modal-action {
-  width: 100%;
-  margin-top: 34rpx;
+.skeleton-item-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.skeleton-line.name {
+  width: 220rpx;
+  height: 30rpx;
+  border-radius: 12rpx;
+}
+
+.skeleton-line.meta {
+  width: 320rpx;
+  height: 24rpx;
+  margin-top: 18rpx;
+  border-radius: 12rpx;
+}
+
+.skeleton-pill {
+  flex: 0 0 auto;
+  width: 104rpx;
+  height: 44rpx;
+}
+
+@keyframes skeleton-shimmer {
+  to {
+    transform: translateX(100%);
+  }
 }
 </style>

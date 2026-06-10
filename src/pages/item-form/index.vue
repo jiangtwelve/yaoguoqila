@@ -2,17 +2,28 @@
 import { computed, onMounted, ref } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import AppNavBar from '@/components/AppNavBar.vue';
-import { calculateExpiryDate, getItemStatus } from '@/domain/expiry';
+import GlassModal from '@/components/GlassModal.vue';
 import type { ExpiryInputMode, Item, ItemFormOptions, ItemInput, ShelfLifeUnit } from '@/domain/models';
 import { createItem, getItemDetail, getItemFormOptions, updateItem } from '@/services/homeService';
 import { getNavigationSafeArea } from '@/utils/navigationSafeArea';
 import { markHomeNeedsRefresh, markItemDetailNeedsRefresh } from '@/utils/pageRefresh';
 
+type FormItemStatus = 'normal' | 'expiring' | 'expires_today' | 'expired';
+type RiskyCreateStatus = 'expired' | 'expires_today' | 'expiring';
+
+interface RiskyCreateConfirmState {
+  status: RiskyCreateStatus;
+  remainingDays: number;
+}
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const loading = ref(true);
 const saving = ref(false);
 const errorMessage = ref('');
 const options = ref<ItemFormOptions | null>(null);
 const itemId = ref('');
+const riskyCreateConfirm = ref<RiskyCreateConfirmState | null>(null);
+let resolveRiskyCreateConfirm: ((confirmed: boolean) => void) | null = null;
 
 const name = ref('');
 const imageUrls = ref<string[]>([]);
@@ -28,11 +39,16 @@ const shelfLifeUnits: Array<{ label: string; value: ShelfLifeUnit }> = [
   { label: '月', value: 'month' },
   { label: '年', value: 'year' }
 ];
+const riskyCreateConfirmActions = {
+  cancelText: '取消',
+  confirmText: '确认'
+};
 const placeholderStyle = 'color: rgba(16, 20, 24, 0.38); font-size: 28rpx; line-height: 1.35;';
 
-const navTopPx = ref(24);
-const navHeightPx = ref(40);
-const capsuleReservePx = ref(118);
+const safeArea = getNavigationSafeArea();
+const navTopPx = ref(safeArea.navTopPx);
+const navHeightPx = ref(safeArea.navHeightPx);
+const capsuleReservePx = ref(safeArea.capsuleReservePx);
 
 const shellStyle = computed(() => ({
   paddingTop: `${navTopPx.value + navHeightPx.value + 28}px`
@@ -54,10 +70,12 @@ const shelfLifeUnitLabel = computed(() => {
 
 const canSave = computed(() => {
   if (!name.value.trim()) return false;
+  if (!options.value?.family) return false;
   if (expiryInputMode.value === 'explicit_date') return Boolean(expiresAt.value);
 
   return Boolean(productionDate.value && shelfLifeValue.value && calculatedExpiresAt.value);
 });
+const formLocked = computed(() => loading.value || saving.value);
 
 const calculatedExpiresAt = computed(() => {
   const value = Number(shelfLifeValue.value);
@@ -69,7 +87,7 @@ const calculatedExpiresAt = computed(() => {
 const calculatedStatusClass = computed(() => {
   if (!calculatedExpiresAt.value) return '';
 
-  return `calculated-${getItemStatus(calculatedExpiresAt.value).replace('_', '-')}`;
+  return `calculated-${getFormItemStatus(calculatedExpiresAt.value).replace('_', '-')}`;
 });
 
 onLoad((query) => {
@@ -77,17 +95,8 @@ onLoad((query) => {
 });
 
 onMounted(() => {
-  updateNavSafeArea();
   void loadForm();
 });
-
-function updateNavSafeArea() {
-  const safeArea = getNavigationSafeArea();
-
-  navTopPx.value = safeArea.navTopPx;
-  navHeightPx.value = safeArea.navHeightPx;
-  capsuleReservePx.value = safeArea.capsuleReservePx;
-}
 
 async function loadForm() {
   loading.value = true;
@@ -119,6 +128,8 @@ function fillForm(item: Item, fallbackLocationName: string | null) {
 }
 
 function chooseImage() {
+  if (formLocked.value) return;
+
   uni.chooseImage({
     count: Math.max(1, 9 - imageUrls.value.length),
     sizeType: ['compressed'],
@@ -130,26 +141,38 @@ function chooseImage() {
 }
 
 function removeImage(index: number) {
+  if (formLocked.value) return;
+
   imageUrls.value = imageUrls.value.filter((_, currentIndex) => currentIndex !== index);
 }
 
 function setExpiryMode(mode: ExpiryInputMode) {
+  if (formLocked.value) return;
+
   expiryInputMode.value = mode;
 }
 
 function setLocationName(nameValue: string) {
+  if (formLocked.value) return;
+
   locationName.value = nameValue;
 }
 
 function handleExpiresAtChange(event: { detail: { value: string } }) {
+  if (formLocked.value) return;
+
   expiresAt.value = event.detail.value;
 }
 
 function handleProductionDateChange(event: { detail: { value: string } }) {
+  if (formLocked.value) return;
+
   productionDate.value = event.detail.value;
 }
 
 function handleShelfLifeUnitChange(event: { detail: { value: number | string } }) {
+  if (formLocked.value) return;
+
   const index = Number(event.detail.value);
   const selected = shelfLifeUnits[index];
 
@@ -158,14 +181,72 @@ function handleShelfLifeUnitChange(event: { detail: { value: number | string } }
   }
 }
 
-async function saveItem() {
-  if (!options.value?.family || !canSave.value) return;
+function calculateExpiryDate(productionDateValue: string, shelfLifeValueNumber: number, shelfLifeUnitValue: ShelfLifeUnit): string {
+  const date = new Date(productionDateValue);
 
-  saving.value = true;
+  if (shelfLifeUnitValue === 'day') {
+    date.setDate(date.getDate() + shelfLifeValueNumber);
+  }
+
+  if (shelfLifeUnitValue === 'month') {
+    date.setMonth(date.getMonth() + shelfLifeValueNumber);
+  }
+
+  if (shelfLifeUnitValue === 'year') {
+    date.setFullYear(date.getFullYear() + shelfLifeValueNumber);
+  }
+
+  return formatDate(date);
+}
+
+function getFormItemStatus(expiresAtValue: string, now = new Date(), expiringWindowDays = 7): FormItemStatus {
+  const remainingDays = getRemainingDays(expiresAtValue, now);
+
+  if (remainingDays < 0) return 'expired';
+  if (remainingDays === 0) return 'expires_today';
+  if (remainingDays <= expiringWindowDays) return 'expiring';
+
+  return 'normal';
+}
+
+function getRemainingDays(expiresAtValue: string, now = new Date()): number {
+  const today = startOfDay(now);
+  const expiry = startOfDay(new Date(expiresAtValue));
+
+  return Math.round((expiry.getTime() - today.getTime()) / MS_PER_DAY);
+}
+
+function startOfDay(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function formatDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+}
+
+async function saveItem() {
+  if (saving.value) return;
+
+  void uni.hideKeyboard();
+
+  const blockedMessage = getSaveBlockedMessage();
+  if (blockedMessage) {
+    errorMessage.value = blockedMessage;
+    void uni.showToast({ title: blockedMessage, icon: 'none' });
+    return;
+  }
+
+  const formOptions = options.value;
+  if (!formOptions?.family) return;
+
   errorMessage.value = '';
 
   const locationText = locationName.value.trim();
-  const matchedLocation = options.value.locations.find((location) => location.name === locationText);
+  const matchedLocation = formOptions.locations.find((location) => location.name === locationText);
   const finalExpiresAt = expiryInputMode.value === 'explicit_date' ? expiresAt.value : calculatedExpiresAt.value;
   const input: ItemInput = {
     name: name.value.trim(),
@@ -183,6 +264,13 @@ async function saveItem() {
     note: note.value.trim() || null
   };
 
+  if (!itemId.value) {
+    const confirmed = await confirmRiskyNewItem(finalExpiresAt);
+    if (!confirmed) return;
+  }
+
+  saving.value = true;
+
   try {
     let savedItemId: string | undefined;
 
@@ -190,7 +278,7 @@ async function saveItem() {
       const updatedItem = await updateItem(itemId.value, input);
       savedItemId = updatedItem.id;
     } else {
-      const createdItem = await createItem(options.value.family.id, input);
+      const createdItem = await createItem(formOptions.family.id, input);
       savedItemId = createdItem.id;
     }
 
@@ -206,9 +294,68 @@ async function saveItem() {
   }
 }
 
+function getSaveBlockedMessage(): string {
+  if (!options.value) {
+    return loading.value ? '表单还在准备，请稍后再保存' : '表单信息加载失败，请返回重试';
+  }
+
+  if (!options.value.family) return '请先创建或选择家庭';
+  if (!name.value.trim()) return '请先填写名称';
+
+  if (expiryInputMode.value === 'explicit_date') {
+    return expiresAt.value ? '' : '请先选择过期日期';
+  }
+
+  if (!productionDate.value) return '请先选择生产日期';
+  if (!shelfLifeValue.value || !calculatedExpiresAt.value) return '请填写有效保质期';
+
+  return '';
+}
+
+function confirmRiskyNewItem(expiresAtValue: string): Promise<boolean> {
+  const status = getFormItemStatus(expiresAtValue);
+  if (!['expired', 'expires_today', 'expiring'].includes(status)) {
+    return Promise.resolve(true);
+  }
+
+  return new Promise((resolve) => {
+    if (resolveRiskyCreateConfirm) {
+      resolveRiskyCreateConfirm(false);
+    }
+
+    const riskyStatus = status as RiskyCreateStatus;
+    resolveRiskyCreateConfirm = resolve;
+    riskyCreateConfirm.value = {
+      status: riskyStatus,
+      remainingDays: getRemainingDays(expiresAtValue)
+    };
+  });
+}
+
+function cancelRiskyCreateConfirm() {
+  closeRiskyCreateConfirm(false);
+}
+
+function confirmRiskyCreateConfirm() {
+  closeRiskyCreateConfirm(true);
+}
+
+function closeRiskyCreateConfirm(confirmed: boolean) {
+  const resolve = resolveRiskyCreateConfirm;
+
+  riskyCreateConfirm.value = null;
+  resolveRiskyCreateConfirm = null;
+
+  if (resolve) {
+    resolve(confirmed);
+  }
+}
+
 function goBack() {
   uni.navigateBack();
 }
+
+function stopLockedInteraction() {}
 </script>
 
 <template>
@@ -216,25 +363,50 @@ function goBack() {
     <AppNavBar :title="pageTitle" :nav-style="navStyle" show-back @back="goBack" />
 
     <view class="shell" :style="shellStyle">
-      <view v-if="loading" class="quiet-state">
-        <text class="state-title">正在准备</text>
-        <text class="state-copy">稍等一下</text>
+      <view v-if="loading && isEditing" class="form-skeleton" aria-label="加载中">
+        <view class="skeleton-photo-field skeleton-surface">
+          <view class="skeleton-photo-grid">
+            <view class="skeleton-photo-tile"></view>
+            <view class="skeleton-photo-tile"></view>
+            <view class="skeleton-photo-tile soft"></view>
+          </view>
+        </view>
+
+        <view class="skeleton-field skeleton-surface">
+          <view class="skeleton-line label"></view>
+          <view class="skeleton-line input"></view>
+        </view>
+
+        <view class="skeleton-date skeleton-surface">
+          <view class="skeleton-date-head">
+            <view class="skeleton-line label"></view>
+            <view class="skeleton-line hint"></view>
+          </view>
+          <view class="skeleton-date-card"></view>
+          <view class="skeleton-or"></view>
+          <view class="skeleton-date-card split"></view>
+        </view>
+
+        <view class="skeleton-field skeleton-surface">
+          <view class="skeleton-line label"></view>
+          <view class="skeleton-line input short"></view>
+        </view>
       </view>
 
-      <view v-else-if="!options?.family" class="quiet-state">
+      <view v-else-if="options && !options.family" class="quiet-state">
         <text class="state-title">还没有家庭</text>
         <text class="state-copy">创建或加入家庭后再录入物品。</text>
       </view>
 
-      <view v-else class="form">
+      <view v-else class="form" :class="{ 'is-locked': formLocked }">
         <view class="photo-field">
           <view class="photo-grid">
             <view v-for="(url, index) in imageUrls" :key="url" class="photo-tile">
               <image class="photo-preview" :src="url" mode="aspectFill" />
               <text v-if="index === 0" class="cover-badge">封面</text>
-              <button class="remove-photo" @click="removeImage(index)">×</button>
+              <button class="remove-photo" :disabled="formLocked" @click="removeImage(index)">×</button>
             </view>
-            <button v-if="imageUrls.length < 9" class="photo-picker" @click="chooseImage">
+            <button v-if="imageUrls.length < 9" class="photo-picker" :disabled="formLocked" @click="chooseImage">
               <text class="photo-plus">＋</text>
               <text class="photo-copy">{{ imageUrls.length ? '继续添加' : '上传图片' }}</text>
             </button>
@@ -243,7 +415,7 @@ function goBack() {
 
         <label class="field">
           <text class="label">名称 <text class="required-mark">*</text></text>
-          <input v-model="name" class="input" placeholder="例如 鲜牛奶" :placeholder-style="placeholderStyle" />
+          <input v-model="name" class="input" placeholder="例如 鲜牛奶" :placeholder-style="placeholderStyle" :disabled="formLocked" />
         </label>
 
         <view class="date-panel">
@@ -254,7 +426,7 @@ function goBack() {
 
           <view class="date-mode" :class="{ active: expiryInputMode === 'explicit_date' }" @click="setExpiryMode('explicit_date')">
             <text class="mode-title">直接填写过期日期</text>
-            <picker mode="date" :value="expiresAt" @change="handleExpiresAtChange">
+            <picker mode="date" :value="expiresAt" :disabled="formLocked" @change="handleExpiresAtChange">
               <view class="picker-value" :class="{ empty: !expiresAt }">
                 <text>{{ expiresAt || '选择过期日期' }}</text>
                 <text class="picker-arrow">⌄</text>
@@ -269,7 +441,7 @@ function goBack() {
           <view class="date-mode" :class="{ active: expiryInputMode === 'production_date_and_shelf_life' }" @click="setExpiryMode('production_date_and_shelf_life')">
             <text class="mode-title">生产日期 + 保质期</text>
             <view class="formula-grid">
-              <picker mode="date" :value="productionDate" @change="handleProductionDateChange">
+              <picker mode="date" :value="productionDate" :disabled="formLocked" @change="handleProductionDateChange">
                 <view class="formula-card">
                   <view class="formula-value" :class="{ empty: !productionDate }">
                     <text>{{ productionDate || '请选择' }}</text>
@@ -282,8 +454,11 @@ function goBack() {
 
               <view class="formula-card">
                 <view class="formula-value shelf-control">
-                  <input v-model="shelfLifeValue" class="shelf-input" type="number" placeholder="填写" :placeholder-style="placeholderStyle" />
-                  <picker mode="selector" :range="shelfLifeUnits" range-key="label" @change="handleShelfLifeUnitChange">
+                  <view class="shelf-entry">
+                    <input v-model="shelfLifeValue" class="shelf-input" type="number" placeholder="" :disabled="formLocked" />
+                    <text v-if="!shelfLifeValue" class="shelf-placeholder">填写</text>
+                  </view>
+                  <picker mode="selector" :range="shelfLifeUnits" range-key="label" :disabled="formLocked" @change="handleShelfLifeUnitChange">
                     <view class="unit-select">
                       <text>{{ shelfLifeUnitLabel }}</text>
                       <text class="picker-arrow">⌄</text>
@@ -301,13 +476,14 @@ function goBack() {
 
         <label class="field">
           <text class="label">位置</text>
-          <input v-model="locationName" class="input" placeholder="例如 冰箱冷藏" :placeholder-style="placeholderStyle" />
-          <view v-if="options.locations.length" class="history-row">
+          <input v-model="locationName" class="input" placeholder="例如 冰箱冷藏" :placeholder-style="placeholderStyle" :disabled="formLocked" />
+          <view v-if="options?.locations?.length" class="history-row">
             <button
               v-for="location in options.locations"
               :key="location.id"
               class="choice"
               :class="{ selected: locationName === location.name }"
+              :disabled="formLocked"
               @click="setLocationName(location.name)"
             >
               {{ location.name }}
@@ -317,16 +493,56 @@ function goBack() {
 
         <label class="field">
           <text class="label">备注</text>
-          <textarea v-model="note" class="textarea" placeholder="可选" :placeholder-style="placeholderStyle" />
+          <textarea v-model="note" class="textarea" placeholder="可选" :placeholder-style="placeholderStyle" :disabled="formLocked" />
         </label>
 
         <text v-if="errorMessage" class="error">{{ errorMessage }}</text>
 
-        <button class="save-button" :class="{ disabled: !canSave || saving }" :disabled="!canSave || saving" @click="saveItem">
-          {{ saving ? '保存中' : isEditing ? '保存修改' : '保存' }}
-        </button>
+        <cover-view
+          v-if="!riskyCreateConfirm"
+          class="save-button"
+          :class="{ 'is-disabled': !canSave && !saving, 'is-saving': saving }"
+          @tap.stop="saveItem"
+        >
+          <cover-view class="save-button-label">{{ saving ? '保存中' : isEditing ? '保存修改' : '保存' }}</cover-view>
+        </cover-view>
       </view>
     </view>
+
+    <cover-view
+      v-if="saving"
+      class="save-loading-backdrop"
+      @tap.stop="stopLockedInteraction"
+      @touchmove.stop="stopLockedInteraction"
+    >
+      <cover-view class="save-loading-card">
+        <cover-view class="save-loading-spinner"></cover-view>
+        <cover-view class="save-loading-title">{{ isEditing ? '正在保存修改' : '正在保存物品' }}</cover-view>
+        <cover-view class="save-loading-copy">正在同步到家庭清单</cover-view>
+      </cover-view>
+    </cover-view>
+
+    <GlassModal
+      :show="Boolean(riskyCreateConfirm)"
+      title="提醒"
+      copy-align="center"
+      :secondary-text="riskyCreateConfirmActions.cancelText"
+      :primary-text="riskyCreateConfirmActions.confirmText"
+      close-on-backdrop
+      @secondary="cancelRiskyCreateConfirm"
+      @primary="confirmRiskyCreateConfirm"
+      @backdrop="cancelRiskyCreateConfirm"
+    >
+      <view v-if="riskyCreateConfirm" class="risk-reminder-copy">
+        <template v-if="riskyCreateConfirm.status === 'expiring'">
+          <text>还有</text>
+          <text class="risk-days">{{ riskyCreateConfirm.remainingDays }}</text>
+          <text>天到期，确认添加吗？</text>
+        </template>
+        <text v-else-if="riskyCreateConfirm.status === 'expires_today'">今天到期，确认添加吗？</text>
+        <text v-else>已过期，确认添加吗？</text>
+      </view>
+    </GlassModal>
   </view>
 </template>
 
@@ -386,8 +602,15 @@ function goBack() {
 }
 
 .form {
+  position: relative;
   margin-top: 24rpx;
   padding-bottom: 24rpx;
+}
+
+.form.is-locked .photo-field,
+.form.is-locked .field,
+.form.is-locked .date-panel {
+  filter: saturate(0.88);
 }
 
 .photo-field {
@@ -483,6 +706,12 @@ function goBack() {
   -webkit-backdrop-filter: blur(14rpx);
 }
 
+.photo-picker[disabled],
+.remove-photo[disabled],
+.choice[disabled] {
+  opacity: 0.52;
+}
+
 .field {
   display: block;
   margin-top: 18rpx;
@@ -540,6 +769,10 @@ function goBack() {
   color: rgba(16, 20, 24, 0.58);
   font-size: 24rpx;
   line-height: 58rpx;
+}
+
+.choice[disabled] {
+  color: rgba(16, 20, 24, 0.32);
 }
 
 .selected,
@@ -672,15 +905,36 @@ function goBack() {
   justify-content: flex-end;
 }
 
-.shelf-input {
-  width: 104rpx;
+.shelf-entry {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: flex-end;
   min-width: 0;
-  min-height: 68rpx;
+  height: 68rpx;
+}
+
+.shelf-input {
+  width: 100%;
+  min-width: 0;
+  height: 68rpx;
   padding: 0;
   color: #101418;
   font-size: 32rpx;
   line-height: 1.35;
   text-align: right;
+}
+
+.shelf-placeholder {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  color: rgba(16, 20, 24, 0.38);
+  font-size: 28rpx;
+  line-height: 1;
+  pointer-events: none;
+  transform: translateY(-50%);
 }
 
 .unit-select {
@@ -739,28 +993,178 @@ function goBack() {
   color: #e5483f;
 }
 
+.save-loading-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40rpx;
+  background:
+    linear-gradient(155deg, rgba(232, 246, 255, 0.52), rgba(249, 242, 255, 0.48), rgba(241, 250, 244, 0.52)),
+    rgba(255, 255, 255, 0.42);
+  backdrop-filter: blur(18rpx) saturate(112%);
+  -webkit-backdrop-filter: blur(18rpx) saturate(112%);
+  box-sizing: border-box;
+}
+
+.save-loading-card {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  width: 420rpx;
+  padding: 42rpx 36rpx 38rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.76);
+  border-radius: 34rpx;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.84), rgba(255, 255, 255, 0.46)),
+    rgba(255, 255, 255, 0.48);
+  box-shadow: 0 34rpx 88rpx rgba(45, 74, 110, 0.2), inset 0 1rpx 0 rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(38rpx) saturate(128%);
+  -webkit-backdrop-filter: blur(38rpx) saturate(128%);
+  box-sizing: border-box;
+}
+
+.save-loading-spinner {
+  width: 58rpx;
+  height: 58rpx;
+  border: 6rpx solid rgba(79, 127, 120, 0.16);
+  border-top-color: #4f7f78;
+  border-radius: 50%;
+  box-sizing: border-box;
+  animation: save-loading-spin 820ms linear infinite;
+}
+
+.save-loading-title {
+  margin-top: 24rpx;
+  color: #101418;
+  font-size: 30rpx;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.save-loading-copy {
+  margin-top: 10rpx;
+  color: rgba(16, 20, 24, 0.52);
+  font-size: 24rpx;
+  line-height: 1.35;
+}
+
+@keyframes save-loading-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.risk-reminder-copy {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8rpx;
+  margin-top: 32rpx;
+  color: #101418;
+  font-size: 30rpx;
+  font-weight: 560;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.risk-days {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 50rpx;
+  height: 46rpx;
+  padding: 0 14rpx;
+  border: 1rpx solid rgba(255, 149, 0, 0.28);
+  border-radius: 999rpx;
+  background: rgba(255, 149, 0, 0.14);
+  color: #c06f00;
+  font-size: 32rpx;
+  font-weight: 800;
+  line-height: 46rpx;
+  box-sizing: border-box;
+}
+
 .save-button {
   position: fixed;
   left: 30rpx;
   right: 30rpx;
   bottom: calc(24rpx + env(safe-area-inset-bottom));
   z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: auto;
   height: 88rpx;
   margin-top: 0;
   border-radius: 999rpx;
-  background: rgba(16, 20, 24, 0.82);
+  border: 1rpx solid rgba(255, 255, 255, 0.52);
+  background:
+    linear-gradient(135deg, rgba(16, 20, 24, 0.92), rgba(61, 83, 86, 0.9)),
+    rgba(16, 20, 24, 0.82);
   color: #ffffff;
   font-size: 30rpx;
   font-weight: 600;
   line-height: 88rpx;
-  box-shadow: 0 20rpx 46rpx rgba(30, 70, 110, 0.24);
+  box-shadow: 0 22rpx 50rpx rgba(30, 70, 110, 0.26), inset 0 1rpx 0 rgba(255, 255, 255, 0.2);
   backdrop-filter: blur(24rpx);
   -webkit-backdrop-filter: blur(24rpx);
+  overflow: hidden;
+  box-sizing: border-box;
+  text-align: center;
 }
 
-.disabled {
-  opacity: 0.42;
+.save-button-label {
+  width: 100%;
+  height: 88rpx;
+  line-height: 88rpx;
+}
+
+.save-button.is-disabled {
+  border-color: rgba(168, 180, 184, 0.48);
+  background:
+    linear-gradient(135deg, rgba(235, 240, 241, 0.96), rgba(211, 220, 222, 0.9)),
+    rgba(222, 230, 232, 0.92);
+  color: rgba(91, 101, 106, 0.62);
+  box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.7), inset 0 -1rpx 0 rgba(125, 138, 143, 0.12);
+  opacity: 1;
+  filter: grayscale(0.22);
+}
+
+.save-button.is-saving {
+  border-color: rgba(255, 255, 255, 0.62);
+  background:
+    linear-gradient(135deg, rgba(79, 127, 120, 0.96), rgba(39, 71, 74, 0.9)),
+    rgba(79, 127, 120, 0.9);
+  color: #ffffff;
+  box-shadow: 0 22rpx 52rpx rgba(79, 127, 120, 0.26), inset 0 1rpx 0 rgba(255, 255, 255, 0.24);
+  opacity: 1;
+}
+
+.save-button.is-saving::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -36%;
+  width: 34%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.24), transparent);
+  animation: save-button-sheen 1.2s ease-in-out infinite;
+}
+
+@keyframes save-button-sheen {
+  to {
+    left: 104%;
+  }
 }
 
 .quiet-state {
@@ -771,6 +1175,123 @@ function goBack() {
   flex-direction: column;
   gap: 18rpx;
   text-align: center;
+}
+
+.form-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 18rpx;
+  margin-top: 24rpx;
+}
+
+.skeleton-surface {
+  border: 1rpx solid rgba(255, 255, 255, 0.62);
+  background: rgba(255, 255, 255, 0.34);
+  box-shadow: 0 20rpx 46rpx rgba(45, 74, 110, 0.09), inset 0 1rpx 0 rgba(255, 255, 255, 0.76);
+  backdrop-filter: blur(28rpx);
+  -webkit-backdrop-filter: blur(28rpx);
+  box-sizing: border-box;
+}
+
+.skeleton-photo-field,
+.skeleton-field,
+.skeleton-date {
+  padding: 24rpx;
+  border-radius: 32rpx;
+}
+
+.skeleton-photo-field {
+  border-radius: 36rpx;
+}
+
+.skeleton-photo-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14rpx;
+}
+
+.skeleton-photo-tile,
+.skeleton-line,
+.skeleton-date-card,
+.skeleton-or {
+  position: relative;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.54);
+}
+
+.skeleton-photo-tile::after,
+.skeleton-line::after,
+.skeleton-date-card::after,
+.skeleton-or::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0.72) 48%, transparent 100%);
+  transform: translateX(-100%);
+  animation: skeleton-shimmer 1.45s ease-in-out infinite;
+}
+
+.skeleton-photo-tile {
+  aspect-ratio: 1;
+  border-radius: 22rpx;
+}
+
+.skeleton-photo-tile.soft {
+  opacity: 0.66;
+}
+
+.skeleton-line {
+  border-radius: 999rpx;
+}
+
+.skeleton-line.label {
+  width: 124rpx;
+  height: 24rpx;
+}
+
+.skeleton-line.input {
+  width: 72%;
+  height: 34rpx;
+  margin-top: 26rpx;
+  border-radius: 12rpx;
+}
+
+.skeleton-line.input.short {
+  width: 48%;
+}
+
+.skeleton-date-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.skeleton-line.hint {
+  width: 96rpx;
+  height: 22rpx;
+}
+
+.skeleton-date-card {
+  height: 118rpx;
+  margin-top: 24rpx;
+  border-radius: 18rpx;
+}
+
+.skeleton-date-card.split {
+  height: 138rpx;
+}
+
+.skeleton-or {
+  width: 44rpx;
+  height: 22rpx;
+  margin: 20rpx auto 0;
+  border-radius: 999rpx;
+}
+
+@keyframes skeleton-shimmer {
+  to {
+    transform: translateX(100%);
+  }
 }
 
 .state-copy,

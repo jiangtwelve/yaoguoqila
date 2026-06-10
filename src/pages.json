@@ -28,6 +28,7 @@
       }
     }
   ],
+  "subPackages": [],
   "globalStyle": {
     "navigationBarTextStyle": "black",
     "navigationBarTitleText": "要过期",

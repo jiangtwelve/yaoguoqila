@@ -17,9 +17,10 @@ const operating = ref(false);
 const pullRefreshState = ref<PullRefreshState>('idle');
 const errorMessage = ref('');
 const detail = ref<ItemDetail | null>(null);
-const navTopPx = ref(24);
-const navHeightPx = ref(40);
-const capsuleReservePx = ref(118);
+const detailSafeArea = getNavigationSafeArea();
+const navTopPx = ref(detailSafeArea.navTopPx);
+const navHeightPx = ref(detailSafeArea.navHeightPx);
+const capsuleReservePx = ref(detailSafeArea.capsuleReservePx);
 
 const item = computed(() => detail.value?.item ?? null);
 const shellStyle = computed(() => ({
@@ -239,9 +240,25 @@ function previewImage(index: number) {
     </view>
 
     <view class="shell" :style="shellStyle">
-      <view v-if="loading" class="quiet-state">
-        <text class="state-title">正在查看</text>
-        <text class="state-copy">稍等一下</text>
+      <view v-if="loading" class="detail-skeleton" aria-label="加载中">
+        <view class="skeleton-hero skeleton-surface">
+          <view class="skeleton-photo"></view>
+          <view class="skeleton-line tiny"></view>
+          <view class="skeleton-line title"></view>
+          <view class="skeleton-line medium"></view>
+        </view>
+
+        <view class="skeleton-panel skeleton-surface">
+          <view class="skeleton-line tiny"></view>
+          <view class="skeleton-line date"></view>
+          <view class="skeleton-line medium"></view>
+        </view>
+
+        <view class="skeleton-panel skeleton-surface">
+          <view class="skeleton-line tiny"></view>
+          <view class="skeleton-row"></view>
+          <view class="skeleton-row short"></view>
+        </view>
       </view>
 
       <view v-else-if="errorMessage" class="quiet-state error">
@@ -415,6 +432,104 @@ button::after {
 
 .error .state-title {
   color: #e5483f;
+}
+
+.detail-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 18rpx;
+}
+
+.skeleton-surface {
+  border: 1rpx solid rgba(255, 255, 255, 0.68);
+  background: rgba(255, 255, 255, 0.46);
+  box-shadow:
+    inset 0 1rpx 0 rgba(255, 255, 255, 0.76),
+    0 18rpx 46rpx rgba(51, 86, 81, 0.09);
+  backdrop-filter: blur(22rpx);
+  -webkit-backdrop-filter: blur(22rpx);
+  box-sizing: border-box;
+}
+
+.skeleton-hero {
+  padding: 22rpx;
+  border-radius: 32rpx;
+}
+
+.skeleton-panel {
+  padding: 24rpx 28rpx;
+  border-radius: 32rpx;
+}
+
+.skeleton-photo,
+.skeleton-line,
+.skeleton-row {
+  position: relative;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.skeleton-photo::after,
+.skeleton-line::after,
+.skeleton-row::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0.74) 48%, transparent 100%);
+  transform: translateX(-100%);
+  animation: skeleton-shimmer 1.45s ease-in-out infinite;
+}
+
+.skeleton-photo {
+  width: 100%;
+  height: 356rpx;
+  border-radius: 26rpx;
+}
+
+.skeleton-line {
+  border-radius: 999rpx;
+}
+
+.skeleton-line.tiny {
+  width: 156rpx;
+  height: 24rpx;
+  margin-top: 24rpx;
+}
+
+.skeleton-line.title {
+  width: 300rpx;
+  height: 54rpx;
+  margin-top: 16rpx;
+  border-radius: 18rpx;
+}
+
+.skeleton-line.medium {
+  width: 380rpx;
+  height: 28rpx;
+  margin-top: 16rpx;
+}
+
+.skeleton-line.date {
+  width: 220rpx;
+  height: 40rpx;
+  margin-top: 14rpx;
+  border-radius: 14rpx;
+}
+
+.skeleton-row {
+  height: 32rpx;
+  margin-top: 24rpx;
+  border-radius: 12rpx;
+}
+
+.skeleton-row.short {
+  width: 68%;
+}
+
+@keyframes skeleton-shimmer {
+  to {
+    transform: translateX(100%);
+  }
 }
 
 .detail-stack {

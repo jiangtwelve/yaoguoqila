@@ -85,6 +85,26 @@ Supported next_action values:
 - 超出范围的发现记录为新任务，不在当前任务里悄悄扩张。
 - 不回滚或覆盖与当前任务无关的已有变更。
 
+## Component Extraction Rule
+- 当同类 UI、交互流程、状态处理或样式结构在 2 处及以上出现，且后续需要统一微调、已确认使用同一视觉语言，或用户连续要求保持一致时，agent 应主动提取共享组件、组合函数或样式抽象，不要等用户明确要求。
+- 即使当前正在修 bug，也要检查问题是否来自重复实现；若重复实现已经影响维护或一致性，应优先做小范围抽象后再继续修复。
+- 若暂时不抽象，必须在 `docs/dev-log.md` 或 `docs/handoff.md` 记录原因、风险和后续触发条件。
+
+## Documentation Update Rule
+每次任务执行完毕后，必须更新对应文档，无论任务大小：
+1. **必须更新：**
+   - `docs/dev-log.md`：记录本次修改内容、验证结果和剩余问题。
+   - `docs/handoff.md`：更新已完成记录、当前任务状态和下一步。
+   - `docs/tasks.md`：更新任务状态（Current/Ready/Done）。
+   - 当前 active `docs/tasks/TASK-xxx.md`：补充完成内容、验收结果和备注。
+2. **按影响范围追加更新：**
+   - 影响版本目标 → 更新 `docs/roadmap.md` 和对应 `docs/releases/*.md`。
+   - 影响 API contract → 更新 `docs/api.md`。
+   - 影响架构 → 更新 `docs/architecture.md` 和 `docs/decisions/`。
+   - 影响页面结构 → 更新 `docs/page-map.md`。
+   - 影响 UI 方向 → 更新 `docs/ui.md`。
+3. **即使只是一个小修复**，也要在任务相关文档中记录完成内容、验证结果和下一步。
+
 ## UI Acceptance
 - 任何用户可见 UI 或交互变化在标记 Done 前都需要用户验收，包括按钮、布局、样式、导航、弹窗、表单、文案、页面状态和交互反馈。
 - 内部重构若保持已接受的视觉和交互行为，只需完成验证并记录。

@@ -46,7 +46,7 @@ updated: 2026-06-06
 - Entry points: 登录后发现当前用户无昵称。
 - Destination links: 首页；若无家庭，展示无家庭空状态。
 - Design role: Design Extension。
-- Notes: 由于当前小程序无法直接获取用户真实微信昵称，昵称必须由用户手动设置；不单独设置页面。
+- Notes: 由于当前小程序无法直接获取用户真实微信昵称，昵称必须由用户手动设置；不单独设置页面。该弹窗使用统一 `GlassModal` 组件，后续类似轻量弹窗沿用同一套视觉和交互。弹窗保持极简结构，通过更显眼的大输入槽和占位文本引导用户填写昵称，不堆叠额外说明文案。
 
 ### 无家庭空状态 / empty/no-family
 - Purpose: 用户暂无家庭时，在首页引导用户创建家庭或加入/接受他人邀请。
@@ -68,18 +68,18 @@ updated: 2026-06-06
 - Entry points: 无家庭空状态点击创建家庭；家庭切换中点击创建新家庭。
 - Destination links: 首页。
 - Design role: Design Extension。
-- Notes: MVP 不为创建家庭单独设置页面。
+- Notes: MVP 不为创建家庭单独设置页面。该弹窗使用统一 `GlassModal` 组件，和昵称设置、提醒确认保持同一套遮罩、玻璃卡片和按钮结构。弹窗保持极简结构，通过更显眼的大输入槽和占位文本引导用户填写家庭名称，不堆叠额外说明文案。
 
 ### 新增/编辑物品 / families/:familyId/items/new 或 items/:itemId/edit
 - Purpose: 录入或维护物品信息。
 - Required features: 名称、图片、位置、分类、直接填写过期日期、或填写生产日期 + 保质期自动计算过期日期、提醒提前天数、备注。
-- Primary interactions: 选择图片、选择直接过期日期，或填写生产日期和保质期后自动生成过期日期，填写表单、保存、取消。
-- States: 新增、编辑、提交中、校验错误、保存失败。
+- Primary interactions: 选择图片、选择直接过期日期，或填写生产日期和保质期后自动生成过期日期，填写表单、保存、取消；新增物品若会直接成为临期、今天到期或已过期状态，保存前需要通过统一 `GlassModal` 二次确认，弹窗标题为「提醒」，正文居中，按钮为 `取消` / `确认`，临期剩余天数需要高亮展示。
+- States: 新增、编辑、临期/过期新增确认、提交中、校验错误、保存失败；表单加载中或提交中需要锁定其他表单操作。
 - Data dependencies: Item, Locations, Categories, ReminderRule。
 - Entry points: 首页新增按钮、详情编辑。
 - Destination links: 物品详情或首页。
 - Design role: Design Extension。
-- Notes: 两种日期录入方式应在视觉上用「或」分隔；最终都保存为统一 `expiresAt`。
+- Notes: 两种日期录入方式应在视觉上用「或」分隔；最终都保存为统一 `expiresAt`。小程序端固定保存按钮使用 `cover-view` 隔离原生 `textarea` 触摸层，避免备注输入框和保存逻辑同时触发；保存中使用表单锁定和全屏轻玻璃 `cover-view` loading，防止用户继续改动表单并明确提示正在同步。
 
 ### 物品详情 / families/:familyId/items/:itemId
 - Purpose: 查看单个物品状态并处理。
