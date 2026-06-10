@@ -340,13 +340,16 @@ async function saveProfile() {
   if (!name || savingProfile.value) return;
 
   savingProfile.value = true;
+  void uni.showLoading({ title: '保存中', mask: true });
   try {
     const user = await updateProfile({ displayName: name });
     if (home.value) {
       home.value = { ...home.value, user };
     }
+    uni.hideLoading();
     void uni.showToast({ title: '昵称已设置', icon: 'success' });
   } catch (error) {
+    uni.hideLoading();
     void uni.showToast({ title: error instanceof Error ? error.message : '设置失败', icon: 'none' });
   } finally {
     savingProfile.value = false;
@@ -358,6 +361,7 @@ async function saveFamily() {
   if (!name || savingFamily.value) return;
 
   savingFamily.value = true;
+  void uni.showLoading({ title: '保存中', mask: true });
   try {
     const family = await createFamily({ name });
     if (home.value) {
@@ -371,8 +375,10 @@ async function saveFamily() {
     }
     showCreateFamily.value = false;
     familyNameInput.value = '';
+    uni.hideLoading();
     void uni.showToast({ title: '家庭已创建', icon: 'success' });
   } catch (error) {
+    uni.hideLoading();
     void uni.showToast({ title: error instanceof Error ? error.message : '创建失败', icon: 'none' });
   } finally {
     savingFamily.value = false;
@@ -535,8 +541,8 @@ async function saveFamily() {
       symbol="你"
       kicker="第一次见面"
       title="设置昵称"
-      :primary-text="savingProfile ? '保存中' : '保存昵称'"
-      :primary-disabled="!profileNameInput.trim() || savingProfile"
+      primary-text="保存昵称"
+      :primary-disabled="!profileNameInput.trim()"
       @primary="saveProfile"
     >
       <view class="glass-modal-field">
@@ -551,8 +557,8 @@ async function saveFamily() {
       kicker="新的收纳空间"
       title="创建家庭"
       secondary-text="取消"
-      :primary-text="savingFamily ? '创建中' : '创建'"
-      :primary-disabled="!familyNameInput.trim() || savingFamily"
+      primary-text="创建"
+      :primary-disabled="!familyNameInput.trim()"
       @secondary="showCreateFamily = false"
       @primary="saveFamily"
     >
@@ -1334,5 +1340,9 @@ async function saveFamily() {
   to {
     transform: translateX(100%);
   }
+}
+
+.glass-modal-field {
+  margin-top: 30rpx;
 }
 </style>

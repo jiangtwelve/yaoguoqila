@@ -1,9 +1,9 @@
 ---
 status: active
-current_task: TASK-011
+current_task: TASK-012
 current_release: v0.1
 project_type: ui_product
-next_action: continue_implementation
+next_action: start_next_ready_task
 blocked: false
 blocker: ""
 acceptance_status: not_required
@@ -14,51 +14,34 @@ updated: 2026-06-10
 # Handoff
 
 ## 当前状态
-项目处于 `v0.1 小程序测试版闭环`，当前任务是 `TASK-011 搭建微信云开发后端基础能力`。
+项目处于 `v0.1 小程序测试版闭环`，TASK-011 已验收完成，当前任务切换到 `TASK-012 家庭切换功能`。
 
-项目类型按 `ui_product` 处理；当前 release 主表面是微信小程序，后端/API 是 v0.1 闭环的支撑能力。当前目标不是继续扩功能，而是在微信开发者工具中用真实 CloudBase 干净数据完成主流程联调：首次进入、设置昵称、创建家庭、新增物品、临期确认、保存 loading、首页列表、详情、编辑、标记用完和删除。
+项目类型按 `ui_product` 处理；当前 release 主表面是微信小程序，后端/API 是 v0.1 闭环的支撑能力。TASK-011 真实联调已通过：首次进入、设置昵称、创建家庭、新增物品（含临期/过期确认）、保存 loading、首页列表与统计、详情、编辑、标记用完和删除主流程均已在微信开发者工具 + 干净 CloudBase 数据下验收。
 
 ## 当前任务快照
-- 已完成 CloudBase MCP 准备、旧函数/旧集合清理、新集合和索引创建。
-- 已部署单入口云函数 `yaoguoqiApi`，前端 cloud adapter 通过 `wx.cloud.callFunction` 调用 `action/payload`。
-- 已完成并验证一批 TASK-011 期间的小程序端兼容和体验修复：弹窗绑定、骨架屏、保存按钮状态、临期/过期二次确认、`GlassModal` 抽取、`textarea` 触摸隔离、表单 loading/saving 锁定、自动真机调试 `subPackages` 兼容。
-- `docs/ui.md` 已记录当前「流光毛玻璃」已验收 UI 基线，以及弹窗、骨架屏、保存 loading、风险确认等规则。
-- `docs/api.md` 仍为 `validated`，待真实云函数和前端集成联调通过后再升级为 `stable`。
+- TASK-011 已完成并验收，期间集中修复了弹窗间距（slot CSS 作用域）、保存 loading（改用 `uni.showLoading` 原生 loading）、表单锁定、骨架屏、`GlassModal` 抽取等体验问题。
+- `docs/api.md` 仍为 `validated`，真实联调已通过但尚未升级为 `stable`；如后续 TASK 影响 API 行为需先按 owner approval 规则确认。
+- TASK-012 家庭切换功能的 scope 和交互设计尚未展开，需要先确认页面地图和交互方案。
 
 ## 最新外部状态
 - CloudBase 环境：`cloud1-d8gr12cmd6578bfd0`。
-- 云函数：仅保留新单入口 `yaoguoqiApi`。
+- 云函数：仅保留 `yaoguoqiApi`。
 - 集合：`users`、`families`、`items`、`locations`、`familyMembers`、`notificationLogs`。
-- 最新一次业务数据清理：2026-06-09 UI 调整后再次清空，清理后六个业务集合计数均为 0。
-- 下一位 agent 若不能确认外部状态仍是干净数据，应先复核集合计数；必要时将 `next_action` 改为 `verify_external_state`。
+- 最新一次业务数据清理：2026-06-10 TASK-011 验收后清空，六个业务集合计数均为 0。
 
 ## 下一步
-1. 打开微信开发者工具，确认自动真机调试已经不再因 `subPackages` 缺字段报错。
-2. 用干净 CloudBase 数据重新跑 TASK-011 主流程：
-   - 首次进入
-   - 设置昵称
-   - 创建家庭
-   - 新增正常/临期/今天到期/已过期物品
-   - 风险确认弹窗
-   - 保存中 loading
-   - 首页列表与统计
-   - 详情
-   - 编辑
-   - 标记用完
-   - 删除
-3. 若真实联调通过，更新 TASK-011 验证结果；如准备把 `docs/api.md` 从 `validated` 升为 `stable`，先按 owner approval 规则确认长期 API 行为。
-4. TASK-011 完成后，按 `docs/releases/v0.1.md` 进入 `TASK-012 家庭切换功能`，不要跳过版本目标直接做 Backlog。
+1. 读取 `docs/tasks/TASK-012-family-switch.md`（如不存在则创建），确认家庭切换的交互方案。
+2. 按 release 计划继续推进 v0.1 闭环，不要跳过版本目标直接做 Backlog。
+3. 后续若需清理数据，先复核集合计数。
 
 ## 阻塞
-- 当前无文档层面的阻塞。
-- 真实联调依赖微信开发者工具和当前 CloudBase 环境可访问。
+- 当前无阻塞。
 
 ## 关键文件
 - `AGENTS.md`
 - `CLAUDE.md`
 - `docs/handoff.md`
 - `docs/tasks.md`
-- `docs/tasks/TASK-011-wechat-cloud-backend-foundation.md`
 - `docs/releases/v0.1.md`
 - `docs/api.md`
 - `docs/ui.md`
@@ -68,6 +51,7 @@ updated: 2026-06-10
 - `src/pages/home/index.vue`
 - `src/pages/item-form/index.vue`
 - `src/pages/item-detail/index.vue`
+- `src/components/GlassModal.vue`
 
 ## 注意事项
 - 接手前先查看 `git status`，不要覆盖其他 agent 的未提交变更。

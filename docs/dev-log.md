@@ -11,7 +11,10 @@ updated: 2026-06-10
 
 ## Index
 
-### 当前连续性与 TASK-011
+### 当前连续性与 TASK-012
+- `2026-06-10 TASK-012 Scope Expansion And Design`：家庭功能合并到 TASK-012，设计统一入口和角色权限方案，邀请功能保留给 TASK-014。
+- `2026-06-10 TASK-011 Accepted`：微信开发者工具真实主流程联调验收通过，TASK-011 标记完成，当前任务切换到 TASK-012。
+- `2026-06-10 TASK-011 Acceptance UX Fixes`：验收期间修复弹窗输入框间距（slot CSS 作用域）、保存 loading（改用原生 `uni.showLoading`）、设置昵称和创建家庭 loading（统一为原生 loading）。
 - `2026-06-10 Optimized Continuity Rule Refresh`：按新版 agent-project-continuity 规则同步项目类型路由、owner approval 和验收分层。
 - `2026-06-10 Continuity Compacting`：新版 project continuity 规则落地，压缩 handoff 和 TASK-011。
 - `2026-06-09 WeChat DevTools Auto Device Debug Config Fix`：自动真机调试 `subPackages` 兼容修复。
@@ -47,6 +50,52 @@ updated: 2026-06-10
 ### 外部状态与 CloudBase
 - 最新可行动外部状态以 `docs/handoff.md` 为准。
 - 需要追溯 CloudBase 操作历史时，读 `2026-06-09 Clean Cloud Database For Acceptance`、`2026-06-08 TASK-011 Cloud Environment Reset And Deploy`、`2026-06-08 TASK-011 Started / CloudBase MCP Prepared`。
+
+## 2026-06-10 TASK-012 Scope Expansion And Design
+- Goal: 按用户要求将家庭相关功能合并到 TASK-012 统一实现，设计家庭功能统一入口和完整交互流。
+- Decision:
+  - 家庭切换、家庭管理（重命名、成员列表、角色权限、移除成员、退出/解散）合并到 TASK-012。
+  - 邀请码、加入家庭功能保留给 TASK-014 独立实现，不纳入 TASK-012。
+  - 成员分管理员（创建者默认）和普通成员，物品权限一致。
+  - 管理员可移除成员、解散家庭；普通成员可退出家庭。
+  - 管理员退出前需先转移管理员或解散家庭（v0.1 暂不支持转移）。
+- Design:
+  - 首页家庭名称升级为可点击的家庭芯片，打开家庭中枢面板（GlassModal）。
+  - 面板展示家庭列表、切换、创建入口、管理入口。
+  - 管理视图在面板内切换，展示重命名、成员列表（含角色标识）、退出/解散操作。
+- Changes:
+  - 重写 `docs/tasks/TASK-012-family-switch.md`：标题改为「家庭切换与家庭管理」，scope 扩展到角色权限和管理操作。
+  - 更新 `docs/page-map.md`：家庭切换页面描述、全局导航和首页 required features。
+- Note:
+  - 新增 `Frontend Design Skill Rule` 到 AGENTS.md 和 CLAUDE.md：页面改动任务必须调用 frontend-design skill。
+
+## 2026-06-10 TASK-011 Accepted
+- Goal: 用户在微信开发者工具 + 干净 CloudBase 数据下完成 TASK-011 真实主流程联调验收。
+- Result: 验收通过。首次进入、设置昵称、创建家庭、新增物品（含临期/过期确认）、保存 loading、首页列表与统计、详情、编辑、标记用完和删除主流程均正常。
+- Changes:
+  - `docs/tasks/TASK-011-wechat-cloud-backend-foundation.md` 标记为 Done，`acceptance_status: accepted`。
+  - `docs/tasks.md` 当前任务切换到 TASK-012。
+  - `docs/handoff.md` 更新为 TASK-012 状态。
+- Verification:
+  - 验收期间多次清空 CloudBase 业务数据，最终六个集合计数均为 0。
+- Next:
+  - 开始 TASK-012 家庭切换功能，先确认交互方案。
+
+## 2026-06-10 TASK-011 Acceptance UX Fixes
+- Goal: 按验收反馈修复三个体验问题。
+- Root Causes:
+  - 弹窗输入框间距：微信小程序中组件 CSS 不级联到父组件传入的 slot 内容，`.glass-modal-field` 的 `margin-top` 定义在 GlassModal.vue 但对 home/index.vue 的 slot 元素无效。
+  - 保存 loading 无动画：`cover-view` 不支持 CSS `animation`/`transform`，自定义 spinner 在小程序端无法旋转。
+- Changes:
+  - `src/pages/home/index.vue`：在 scoped style 中新增 `.glass-modal-field { margin-top: 30rpx }` 为 slot 内容补充间距。
+  - `src/pages/item-form/index.vue`：移除自定义 `cover-view` loading 弹窗和相关 CSS，改用 `uni.showLoading({ title: '保存中', mask: true })` 原生 loading，保存完成或失败时调用 `uni.hideLoading()`。
+  - `src/pages/home/index.vue`：`saveProfile` 和 `saveFamily` 改为使用 `uni.showLoading` / `uni.hideLoading`，按钮不再显示 loading 状态文本。
+- Verification:
+  - `pnpm typecheck` 通过。
+  - `pnpm test` 通过（19 个测试）。
+  - `pnpm build:mp-weixin` 通过。
+  - 构建产物确认 `glass-modal-field` 样式在 home/index.wxss 中生效，`showLoading`/`hideLoading` 调用在 JS 中存在。
+  - 用户验收确认三个问题均已修复。
 
 ## 2026-06-10 Continuity Compacting
 - Goal: 按新版 `agent-project-continuity` 规则压缩项目连续性文档，让接手状态更轻、更稳定。

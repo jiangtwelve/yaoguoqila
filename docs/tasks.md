@@ -1,6 +1,6 @@
 ---
 status: active
-current_task: TASK-011
+current_task: TASK-012
 current_release: v0.1
 updated: 2026-06-10
 ---
@@ -8,10 +8,9 @@ updated: 2026-06-10
 # Tasks
 
 ## Current
-- TASK-011: 搭建微信云开发后端基础能力。`release: v0.1`，当前已完成 CloudBase 基础资源、单入口云函数、前端 cloud adapter、小程序端关键兼容与体验修复；下一步是在干净 CloudBase 数据下用微信开发者工具完成真实主流程联调。
+- TASK-012: 家庭切换功能。`release: v0.1`
 
 ## Ready
-- TASK-012: 家庭切换功能。`release: v0.1`
 - TASK-013: 图片云存储 adapter 正式接入。`release: v0.1`
 - TASK-014: 加入家庭与邀请最小流程。`release: v0.1`
 - TASK-015: v0.1 测试版验收与体验修复。`release: v0.1`
@@ -40,3 +39,4 @@ updated: 2026-06-10
 - TASK-008: 首页物品左滑删除与二次确认验收完成。
 - TASK-009: 全页面下拉刷新验收完成。
 - TASK-010: API contract 验证完成。
+- TASK-011: 微信云开发后端基础能力验收完成。

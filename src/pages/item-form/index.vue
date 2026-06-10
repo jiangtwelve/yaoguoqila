@@ -270,6 +270,7 @@ async function saveItem() {
   }
 
   saving.value = true;
+  void uni.showLoading({ title: '保存中', mask: true });
 
   try {
     let savedItemId: string | undefined;
@@ -286,9 +287,12 @@ async function saveItem() {
     if (itemId.value && savedItemId) {
       markItemDetailNeedsRefresh(savedItemId);
     }
+    uni.hideLoading();
     uni.navigateBack();
   } catch (error) {
+    uni.hideLoading();
     errorMessage.value = error instanceof Error ? error.message : '保存失败';
+    void uni.showToast({ title: '保存失败', icon: 'none' });
   } finally {
     saving.value = false;
   }
@@ -354,8 +358,6 @@ function closeRiskyCreateConfirm(confirmed: boolean) {
 function goBack() {
   uni.navigateBack();
 }
-
-function stopLockedInteraction() {}
 </script>
 
 <template>
@@ -508,19 +510,6 @@ function stopLockedInteraction() {}
         </cover-view>
       </view>
     </view>
-
-    <cover-view
-      v-if="saving"
-      class="save-loading-backdrop"
-      @tap.stop="stopLockedInteraction"
-      @touchmove.stop="stopLockedInteraction"
-    >
-      <cover-view class="save-loading-card">
-        <cover-view class="save-loading-spinner"></cover-view>
-        <cover-view class="save-loading-title">{{ isEditing ? '正在保存修改' : '正在保存物品' }}</cover-view>
-        <cover-view class="save-loading-copy">正在同步到家庭清单</cover-view>
-      </cover-view>
-    </cover-view>
 
     <GlassModal
       :show="Boolean(riskyCreateConfirm)"
@@ -991,74 +980,6 @@ function stopLockedInteraction() {}
 
 .calculated-expired {
   color: #e5483f;
-}
-
-.save-loading-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 80;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 40rpx;
-  background:
-    linear-gradient(155deg, rgba(232, 246, 255, 0.52), rgba(249, 242, 255, 0.48), rgba(241, 250, 244, 0.52)),
-    rgba(255, 255, 255, 0.42);
-  backdrop-filter: blur(18rpx) saturate(112%);
-  -webkit-backdrop-filter: blur(18rpx) saturate(112%);
-  box-sizing: border-box;
-}
-
-.save-loading-card {
-  display: flex;
-  align-items: center;
-  flex-direction: column;
-  width: 420rpx;
-  padding: 42rpx 36rpx 38rpx;
-  border: 1rpx solid rgba(255, 255, 255, 0.76);
-  border-radius: 34rpx;
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.84), rgba(255, 255, 255, 0.46)),
-    rgba(255, 255, 255, 0.48);
-  box-shadow: 0 34rpx 88rpx rgba(45, 74, 110, 0.2), inset 0 1rpx 0 rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(38rpx) saturate(128%);
-  -webkit-backdrop-filter: blur(38rpx) saturate(128%);
-  box-sizing: border-box;
-}
-
-.save-loading-spinner {
-  width: 58rpx;
-  height: 58rpx;
-  border: 6rpx solid rgba(79, 127, 120, 0.16);
-  border-top-color: #4f7f78;
-  border-radius: 50%;
-  box-sizing: border-box;
-  animation: save-loading-spin 820ms linear infinite;
-}
-
-.save-loading-title {
-  margin-top: 24rpx;
-  color: #101418;
-  font-size: 30rpx;
-  font-weight: 700;
-  line-height: 1.3;
-}
-
-.save-loading-copy {
-  margin-top: 10rpx;
-  color: rgba(16, 20, 24, 0.52);
-  font-size: 24rpx;
-  line-height: 1.35;
-}
-
-@keyframes save-loading-spin {
-  from {
-    transform: rotate(0deg);
-  }
-
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 .risk-reminder-copy {
