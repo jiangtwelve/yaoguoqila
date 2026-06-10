@@ -4,7 +4,7 @@ current_task: TASK-011
 current_release: v0.1
 next_action: continue_implementation
 blocked: false
-updated: 2026-06-09
+updated: 2026-06-10
 ---
 
 # Handoff
@@ -68,6 +68,7 @@ updated: 2026-06-09
 - 已按用户反馈继续优化本轮验收体验：设置昵称和创建家庭弹窗已回到极简结构，移除堆叠提示文本和字段标签，通过更高、更亮、更有边界的大输入槽突出输入动作；临期确认缩短为「还有 x 天到期，确认添加吗？」并高亮天数；新增/编辑保存中升级为全屏轻玻璃 `cover-view` loading。
 - 本轮 UI 调整完成后已再次清空真实 CloudBase 业务数据：清理前 `users=1`、`families=1`、`items=3`、`locations=2`、`familyMembers=0`、`notificationLogs=0`，清理后六个集合均为 0。
 - 已修复微信开发者工具自动真机调试编译异常：`src/pages.json` 显式声明 `"subPackages": []`，构建后 `dist/build/mp-weixin/app.json` 稳定包含该字段，避免 DevTools `2.01.2510290` 在无分包项目上读取 `subPackages` 时报错。
+- 已将本地 agent/tooling 产物 `.agents/`、`.claude/`、`.mcp.json`、`skills-lock.json` 加入 `.gitignore`，避免误提交本机配置和工具缓存。
 
 ## 当前任务
 - TASK-011: 搭建微信云开发后端基础能力。`release: v0.1`
@@ -103,5 +104,5 @@ updated: 2026-06-09
 - cloudfunctions/yaoguoqiApi/index.js
 
 ## 注意事项
-- 当前存在未提交的 TASK-011 后续开发与首页 UI 调整；接手前先查看 `git status`，确认不要覆盖其他 agent 的未提交变更。
+- 接手前先查看 `git status`，确认不要覆盖其他 agent 的未提交变更。
 - 任何 UI 原型完成后都需要用户验收，不能由 agent 自行标记 Done。

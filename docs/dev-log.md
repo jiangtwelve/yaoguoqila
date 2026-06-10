@@ -1,8 +1,15 @@
 ---
-updated: 2026-06-09
+updated: 2026-06-10
 ---
 
 # Dev Log
+
+## 2026-06-10 Ignore Local Agent Tooling State
+- Goal: 按用户要求将本地 agent/tooling 产物加入 Git 忽略名单，避免误提交本机配置和工具缓存。
+- Changes:
+  - 更新 `.gitignore`：新增 `.agents/`、`.claude/`、`.mcp.json`、`skills-lock.json` 忽略规则。
+- Verification:
+  - `git status --short` 仅显示 `.gitignore` 修改，本地工具产物已不再作为未跟踪文件出现。
 
 ## 2026-06-09 Minimal Modal Input Focus Refinement
 - Goal: 按用户反馈回收设置昵称和创建家庭弹窗的信息堆叠，保持极简风格，同时让输入框本身更显眼。
