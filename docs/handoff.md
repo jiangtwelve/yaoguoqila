@@ -3,10 +3,10 @@ status: active
 current_task: TASK-012
 current_release: v0.1
 project_type: ui_product
-next_action: start_next_ready_task
+next_action: wait_for_user_acceptance
 blocked: false
 blocker: ""
-acceptance_status: not_required
+acceptance_status: pending
 external_state_status: ready_for_clean_acceptance
 updated: 2026-06-10
 ---
@@ -14,25 +14,30 @@ updated: 2026-06-10
 # Handoff
 
 ## 当前状态
-项目处于 `v0.1 小程序测试版闭环`，TASK-011 已验收完成，当前任务切换到 `TASK-012 家庭切换功能`。
+项目处于 `v0.1 小程序测试版闭环`，TASK-012 家庭切换与家庭管理已实现完成，等待用户验收。
 
-项目类型按 `ui_product` 处理；当前 release 主表面是微信小程序，后端/API 是 v0.1 闭环的支撑能力。TASK-011 真实联调已通过：首次进入、设置昵称、创建家庭、新增物品（含临期/过期确认）、保存 loading、首页列表与统计、详情、编辑、标记用完和删除主流程均已在微信开发者工具 + 干净 CloudBase 数据下验收。
+TASK-011 真实联调已验收通过。TASK-012 在 TASK-011 基础上实现了完整的家庭功能：家庭切换、重命名、成员管理（含角色区分）、退出家庭、解散家庭。前端通过 FamilyHub 组件提供统一的底部面板入口，后端新增 6 个云函数 action。
 
 ## 当前任务快照
-- TASK-011 已完成并验收，期间集中修复了弹窗间距（slot CSS 作用域）、保存 loading（改用 `uni.showLoading` 原生 loading）、表单锁定、骨架屏、`GlassModal` 抽取等体验问题。
-- `docs/api.md` 仍为 `validated`，真实联调已通过但尚未升级为 `stable`；如后续 TASK 影响 API 行为需先按 owner approval 规则确认。
-- TASK-012 家庭切换功能的 scope 和交互设计尚未展开，需要先确认页面地图和交互方案。
+- TASK-012 实现完成，包含：
+  - 云函数：`family.switchFamily`、`family.renameFamily`、`family.getMembers`、`family.removeMember`、`family.leaveFamily`、`family.dissolveFamily`
+  - 领域模型：`Family.role`、`FamilyMemberInfo`、6 个新 Input 类型
+  - 前端服务层：`HomeRepository` 接口和 `CloudHomeRepository`/`MockHomeRepository` 均已扩展
+  - UI 组件：`FamilyHub.vue`（底部面板，含家庭列表视图和管理视图）
+  - 首页集成：family-button 点击打开 FamilyHub，支持切换、创建、管理
+- 构建和测试均通过（19/19 tests pass）
+- 等待用户在微信开发者工具中验收
 
 ## 最新外部状态
 - CloudBase 环境：`cloud1-d8gr12cmd6578bfd0`。
-- 云函数：仅保留 `yaoguoqiApi`。
+- 云函数：仅保留 `yaoguoqiApi`，需重新上传部署。
 - 集合：`users`、`families`、`items`、`locations`、`familyMembers`、`notificationLogs`。
-- 最新一次业务数据清理：2026-06-10 TASK-011 验收后清空，六个业务集合计数均为 0。
+- `familyMembers` 集合：TASK-012 起 `createFamily` 会写入 owner 记录，已有家庭需要手动补录或依赖 fallback 逻辑。
 
 ## 下一步
-1. 读取 `docs/tasks/TASK-012-family-switch.md`（如不存在则创建），确认家庭切换的交互方案。
-2. 按 release 计划继续推进 v0.1 闭环，不要跳过版本目标直接做 Backlog。
-3. 后续若需清理数据，先复核集合计数。
+1. 用户在微信开发者工具验收 TASK-012。
+2. 验收前需重新部署云函数 `yaoguoqiApi`。
+3. 验收通过后标记 TASK-012 为 done，继续推进 TASK-013/014。
 
 ## 阻塞
 - 当前无阻塞。
@@ -46,16 +51,19 @@ updated: 2026-06-10
 - `docs/api.md`
 - `docs/ui.md`
 - `cloudfunctions/yaoguoqiApi/index.js`
+- `src/domain/models.ts`
 - `src/services/cloud/wechatCloudClient.ts`
 - `src/services/cloud/cloudHomeRepository.ts`
+- `src/services/contracts/homeRepository.ts`
+- `src/services/homeService.ts`
+- `src/components/FamilyHub.vue`
 - `src/pages/home/index.vue`
-- `src/pages/item-form/index.vue`
-- `src/pages/item-detail/index.vue`
-- `src/components/GlassModal.vue`
 
 ## 注意事项
 - 接手前先查看 `git status`，不要覆盖其他 agent 的未提交变更。
-- 任何用户可见 UI 或交互变化在标记任务完成前都需要用户验收；内部重构只需验证并记录。
-- stable API、架构、数据模型、安全/隐私或 release 范围变化需要 owner approval，并记录到对应 source of truth。
+- 云函数已更新，验收前必须重新上传部署 `yaoguoqiApi`。
+- 已有家庭的 `familyMembers` 集合可能为空，`normalizeFamily` 有 fallback（creatorId 匹配即为 owner）。
+- 任何用户可见 UI 或交互变化在标记任务完成前都需要用户验收。
+- stable API、架构、数据模型、安全/隐私或 release 范围变化需要 owner approval。
 - 高影响 CloudBase 操作必须先确认环境和操作范围，操作后记录可观察结果。
-- 历史细节查 `docs/dev-log.md`，不要把长历史重新塞回 `docs/handoff.md`。
+- 历史细节查 `docs/dev-log.md`。

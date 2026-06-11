@@ -22,6 +22,18 @@ exports.main = async (event, context) => {
         return updateProfile(OPENID, payload);
       case 'family.createFamily':
         return createFamily(OPENID, payload);
+      case 'family.switchFamily':
+        return switchFamily(OPENID, payload);
+      case 'family.renameFamily':
+        return renameFamily(OPENID, payload);
+      case 'family.getMembers':
+        return getMembers(OPENID, payload);
+      case 'family.removeMember':
+        return removeMember(OPENID, payload);
+      case 'family.leaveFamily':
+        return leaveFamily(OPENID, payload);
+      case 'family.dissolveFamily':
+        return dissolveFamily(OPENID, payload);
       case 'item.getFormOptions':
         return getItemFormOptions(OPENID);
       case 'item.listItems':
@@ -99,7 +111,7 @@ async function createFamily(openId, input) {
   const userDoc = await ensureUser(openId);
   const dup = await db.collection('families').where({ creatorId: openId, name }).get();
   if (dup.data.length > 0) {
-    throw new Error('已存在同名家庭');
+    throw new Error('你已创建过同名家庭，请换一个名称');
   }
 
   const now = nowIso();
@@ -116,6 +128,18 @@ async function createFamily(openId, input) {
   };
 
   const addRes = await db.collection('families').add({ data: family });
+
+  await db.collection('familyMembers').add({
+    data: {
+      familyId: addRes._id,
+      userId: openId,
+      role: 'owner',
+      joinedAt: now,
+      createdAt: now,
+      updatedAt: now
+    }
+  });
+
   await db.collection('users').doc(openId).update({
     data: {
       familyIds: command.push(addRes._id),
@@ -124,7 +148,245 @@ async function createFamily(openId, input) {
     }
   });
 
-  return normalizeFamily({ ...family, _id: addRes._id });
+  return normalizeFamily({ ...family, _id: addRes._id }, openId);
+}
+
+async function switchFamily(openId, payload) {
+  const familyId = (payload.familyId || '').trim();
+  if (!familyId) {
+    throw new Error('家庭ID不能为空');
+  }
+
+  await assertFamilyMember(openId, familyId);
+  await ensureUser(openId);
+  await db.collection('users').doc(openId).update({
+    data: { currentFamilyId: familyId, updatedAt: nowIso() }
+  });
+
+  return { familyId };
+}
+
+async function renameFamily(openId, payload) {
+  const familyId = (payload.familyId || '').trim();
+  const name = (payload.name || '').trim();
+  if (!familyId) throw new Error('家庭ID不能为空');
+  if (!name) throw new Error('家庭名称不能为空');
+
+  await assertFamilyOwner(openId, familyId);
+
+  const dup = await db.collection('families').where({ creatorId: openId, name }).get();
+  if (dup.data.some(f => f._id !== familyId)) {
+    throw new Error('你已创建过同名家庭，请换一个名称');
+  }
+
+  await db.collection('families').doc(familyId).update({
+    data: { name, updatedAt: nowIso() }
+  });
+
+  const familyRes = await db.collection('families').doc(familyId).get();
+  return normalizeFamily(familyRes.data, openId);
+}
+
+async function getMembers(openId, payload) {
+  const familyId = (payload.familyId || '').trim();
+  if (!familyId) throw new Error('家庭ID不能为空');
+
+  await assertFamilyMember(openId, familyId);
+
+  const membersRes = await db.collection('familyMembers')
+    .where({ familyId })
+    .orderBy('joinedAt', 'asc')
+    .get();
+
+  const members = [];
+  for (const doc of membersRes.data) {
+    let displayName = '';
+    try {
+      const userRes = await db.collection('users').doc(doc.userId).get();
+      displayName = userRes.data.displayName || userRes.data.nickname || '';
+    } catch (e) {
+      displayName = '';
+    }
+    members.push({
+      userId: doc.userId,
+      displayName,
+      role: doc.role || 'member',
+      joinedAt: toIsoString(doc.joinedAt)
+    });
+  }
+
+  return members;
+}
+
+async function removeMember(openId, payload) {
+  const familyId = (payload.familyId || '').trim();
+  const userId = (payload.userId || '').trim();
+  if (!familyId || !userId) throw new Error('参数缺失');
+  if (userId === openId) throw new Error('不能移除自己，请使用退出家庭');
+
+  await assertFamilyOwner(openId, familyId);
+
+  const familyRes = await db.collection('families').doc(familyId).get();
+  const family = familyRes.data;
+  const newMemberIds = (family.memberIds || []).filter(id => id !== userId);
+
+  if (newMemberIds.length === 0) {
+    throw new Error('家庭至少需要一个成员');
+  }
+
+  await db.collection('families').doc(familyId).update({
+    data: { memberIds: newMemberIds, updatedAt: nowIso() }
+  });
+
+  const memberDoc = await db.collection('familyMembers')
+    .where({ familyId, userId })
+    .get();
+
+  if (memberDoc.data.length > 0) {
+    await db.collection('familyMembers').doc(memberDoc.data[0]._id).remove();
+  }
+
+  try {
+    await db.collection('users').doc(userId).update({
+      data: {
+        familyIds: command.pull(familyId),
+        updatedAt: nowIso()
+      }
+    });
+  } catch (e) {}
+
+  return { familyId, userId };
+}
+
+async function leaveFamily(openId, payload) {
+  const familyId = (payload.familyId || '').trim();
+  if (!familyId) throw new Error('家庭ID不能为空');
+
+  await assertFamilyMember(openId, familyId);
+
+  const familyRes = await db.collection('families').doc(familyId).get();
+  const family = familyRes.data;
+  const newMemberIds = (family.memberIds || []).filter(id => id !== openId);
+
+  if (newMemberIds.length === 0) {
+    await dissolveFamilyInternal(openId, familyId, family);
+    return { familyId, dissolved: true };
+  }
+
+  const memberDoc = await db.collection('familyMembers')
+    .where({ familyId, userId: openId })
+    .get();
+
+  if (memberDoc.data.length > 0 && memberDoc.data[0].role === 'owner') {
+    const otherOwners = await db.collection('familyMembers')
+      .where({ familyId, role: 'owner' })
+      .get();
+
+    if (otherOwners.data.length <= 1) {
+      throw new Error('管理员退出前请先转移管理员身份或解散家庭');
+    }
+  }
+
+  await db.collection('families').doc(familyId).update({
+    data: { memberIds: newMemberIds, updatedAt: nowIso() }
+  });
+
+  if (memberDoc.data.length > 0) {
+    await db.collection('familyMembers').doc(memberDoc.data[0]._id).remove();
+  }
+
+  await db.collection('users').doc(openId).update({
+    data: {
+      familyIds: command.pull(familyId),
+      currentFamilyId: '',
+      updatedAt: nowIso()
+    }
+  });
+
+  return { familyId, dissolved: false };
+}
+
+async function dissolveFamily(openId, payload) {
+  const familyId = (payload.familyId || '').trim();
+  if (!familyId) throw new Error('家庭ID不能为空');
+
+  const familyRes = await db.collection('families').doc(familyId).get();
+  await assertFamilyOwner(openId, familyId);
+
+  await dissolveFamilyInternal(openId, familyId, familyRes.data);
+  return { familyId };
+}
+
+async function dissolveFamilyInternal(openId, familyId, family) {
+  const memberIds = family.memberIds || [];
+
+  const allMembers = await db.collection('familyMembers')
+    .where({ familyId })
+    .get();
+
+  for (const doc of allMembers.data) {
+    await db.collection('familyMembers').doc(doc._id).remove();
+  }
+
+  const batchSize = 100;
+  let hasMore = true;
+  while (hasMore) {
+    const itemsRes = await db.collection('items')
+      .where({ familyId })
+      .limit(batchSize)
+      .get();
+
+    if (itemsRes.data.length === 0) {
+      hasMore = false;
+      break;
+    }
+
+    for (const doc of itemsRes.data) {
+      await db.collection('items').doc(doc._id).remove();
+    }
+
+    if (itemsRes.data.length < batchSize) {
+      hasMore = false;
+    }
+  }
+
+  await db.collection('families').doc(familyId).remove();
+
+  for (const userId of memberIds) {
+    try {
+      await db.collection('users').doc(userId).update({
+        data: {
+          familyIds: command.pull(familyId),
+          updatedAt: nowIso()
+        }
+      });
+    } catch (e) {}
+  }
+
+  try {
+    await db.collection('users').doc(openId).update({
+      data: { currentFamilyId: '', updatedAt: nowIso() }
+    });
+  } catch (e) {}
+}
+
+async function assertFamilyOwner(openId, familyId) {
+  const memberRes = await db.collection('familyMembers')
+    .where({ familyId, userId: openId })
+    .get();
+
+  if (memberRes.data.length === 0) {
+    throw new Error('无权访问该家庭');
+  }
+
+  const role = memberRes.data[0].role;
+
+  if (role !== 'owner') {
+    const familyRes = await db.collection('families').doc(familyId).get();
+    if (familyRes.data.createdBy !== openId && familyRes.data.creatorId !== openId) {
+      throw new Error('需要管理员权限');
+    }
+  }
 }
 
 async function getItemFormOptions(openId) {
@@ -169,7 +431,7 @@ async function getItemDetail(openId, itemId) {
 
   try {
     const familyRes = await db.collection('families').doc(item.familyId).get();
-    family = normalizeFamily(familyRes.data);
+    family = normalizeFamily(familyRes.data, openId);
   } catch (error) {}
 
   return {
@@ -260,7 +522,15 @@ async function ensureUser(openId) {
 
 async function listFamilies(openId) {
   const res = await db.collection('families').where({ memberIds: openId }).get();
-  return res.data.map(normalizeFamily);
+  const families = res.data;
+
+  const memberRes = await db.collection('familyMembers').where({ userId: openId }).get();
+  const roleMap = {};
+  memberRes.data.forEach(doc => {
+    roleMap[doc.familyId] = doc.role;
+  });
+
+  return families.map(doc => normalizeFamily(doc, openId, roleMap[doc._id]));
 }
 
 async function getCurrentFamily(userDoc, families, openId) {
@@ -406,13 +676,15 @@ function normalizeUser(doc, openId) {
   };
 }
 
-function normalizeFamily(doc) {
+function normalizeFamily(doc, openId, explicitRole) {
+  const role = explicitRole || (doc.createdBy === openId || doc.creatorId === openId ? 'owner' : 'member');
   return {
     id: doc._id || doc.id,
     name: doc.name,
     avatarUrl: doc.avatarUrl || null,
     createdBy: doc.createdBy || doc.creatorId || '',
-    createdAt: toIsoString(doc.createdAt)
+    createdAt: toIsoString(doc.createdAt),
+    role
   };
 }
 

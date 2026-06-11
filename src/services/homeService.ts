@@ -1,4 +1,20 @@
-import type { CreateFamilyInput, FamilyHome, Item, ItemDetail, ItemFormOptions, ItemInput, UpdateProfileInput, User } from '@/domain/models';
+import type {
+  CreateFamilyInput,
+  DissolveFamilyInput,
+  Family,
+  FamilyHome,
+  FamilyMemberInfo,
+  Item,
+  ItemDetail,
+  ItemFormOptions,
+  ItemInput,
+  LeaveFamilyInput,
+  RemoveMemberInput,
+  RenameFamilyInput,
+  SwitchFamilyInput,
+  UpdateProfileInput,
+  User
+} from '@/domain/models';
 import { homeRepository } from './adapters/homeRepository';
 
 export async function getFamilyHome(): Promise<FamilyHome> {
@@ -9,8 +25,32 @@ export async function updateProfile(input: UpdateProfileInput): Promise<User> {
   return homeRepository.updateProfile(input);
 }
 
-export async function createFamily(input: CreateFamilyInput) {
+export async function createFamily(input: CreateFamilyInput): Promise<Family> {
   return homeRepository.createFamily(input);
+}
+
+export async function switchFamily(input: SwitchFamilyInput): Promise<{ familyId: string }> {
+  return homeRepository.switchFamily(input);
+}
+
+export async function renameFamily(input: RenameFamilyInput): Promise<Family> {
+  return homeRepository.renameFamily(input);
+}
+
+export async function getFamilyMembers(familyId: string): Promise<FamilyMemberInfo[]> {
+  return homeRepository.getMembers(familyId);
+}
+
+export async function removeFamilyMember(input: RemoveMemberInput): Promise<{ familyId: string; userId: string }> {
+  return homeRepository.removeMember(input);
+}
+
+export async function leaveFamilyGroup(input: LeaveFamilyInput): Promise<{ familyId: string; dissolved: boolean }> {
+  return homeRepository.leaveFamily(input);
+}
+
+export async function dissolveFamilyGroup(input: DissolveFamilyInput): Promise<{ familyId: string }> {
+  return homeRepository.dissolveFamily(input);
 }
 
 export async function searchItems(familyId: string, search: string): Promise<Item[]> {

@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { onPullDownRefresh, onShow } from '@dcloudio/uni-app';
+import FamilyHub from '@/components/FamilyHub.vue';
 import GlassModal from '@/components/GlassModal.vue';
+import SkeletonBlock from '@/components/SkeletonBlock.vue';
 import type { FamilyHome, Item } from '@/domain/models';
 import { daysUntil } from '@/domain/expiry';
 import { deleteItem, getFamilyHome, searchItems, updateProfile, createFamily } from '@/services/homeService';
@@ -35,6 +37,8 @@ const profileNameInput = ref('');
 const savingProfile = ref(false);
 const familyNameInput = ref('');
 const savingFamily = ref(false);
+const showFamilyHub = ref(false);
+const profileInputFocus = ref(false);
 
 const hasFamily = computed(() => Boolean(home.value?.currentFamily));
 const needsProfileName = computed(() => Boolean(home.value && !home.value.user.hasSetDisplayName));
@@ -59,10 +63,26 @@ const navStyle = computed(() => ({
   minHeight: `${navHeightPx.value}px`,
   paddingRight: `${capsuleReservePx.value}px`
 }));
+const familyHubFamilies = computed(() => home.value?.families ?? []);
+const currentFamilyId = computed(() => home.value?.currentFamily?.id ?? '');
+const currentUserId = computed(() => home.value?.user.id ?? '');
 
 onMounted(() => {
   updateTopSafePadding();
   updateSwipeMetrics();
+});
+
+/** 弹窗渲染稳定后再聚焦输入框，避免键盘与首次渲染布局冲突 */
+watch(needsProfileName, (needs) => {
+  if (needs) {
+    void nextTick().then(() => {
+      setTimeout(() => {
+        profileInputFocus.value = true;
+      }, 120);
+    });
+  } else {
+    profileInputFocus.value = false;
+  }
 });
 
 onShow(() => {
@@ -363,26 +383,45 @@ async function saveFamily() {
   savingFamily.value = true;
   void uni.showLoading({ title: '保存中', mask: true });
   try {
-    const family = await createFamily({ name });
-    if (home.value) {
-      home.value = {
-        ...home.value,
-        currentFamily: family,
-        families: [...home.value.families, family],
-        items: [],
-        locations: []
-      };
-    }
+    await createFamily({ name });
     showCreateFamily.value = false;
     familyNameInput.value = '';
+    search.value = '';
+    await loadHome();
     uni.hideLoading();
     void uni.showToast({ title: '家庭已创建', icon: 'success' });
   } catch (error) {
     uni.hideLoading();
-    void uni.showToast({ title: error instanceof Error ? error.message : '创建失败', icon: 'none' });
+    const message = error instanceof Error ? error.message : '创建失败';
+    void uni.showModal({
+      title: '创建失败',
+      content: message,
+      showCancel: false,
+      confirmText: '知道了'
+    });
   } finally {
     savingFamily.value = false;
   }
+}
+
+/** 家庭切换或管理操作后刷新首页数据 */
+async function handleFamilySwitched() {
+  showFamilyHub.value = false;
+  search.value = '';
+  await loadHome();
+  uni.hideLoading();
+}
+
+/** 重命名后静默刷新首页数据（不关闭 FamilyHub） */
+async function handleFamilyRenamed() {
+  await loadHome();
+}
+
+/** 从 FamilyHub 跳转到创建家庭弹窗 */
+function handleCreateFromHub() {
+  showFamilyHub.value = false;
+  showCreateFamily.value = true;
+  familyNameInput.value = '';
 }
 </script>
 
@@ -390,7 +429,7 @@ async function saveFamily() {
   <view class="page">
     <view class="nav-row" :style="navStyle">
       <view class="nav-title">
-          <button v-if="hasFamily" class="family-button">
+          <button v-if="hasFamily" class="family-button" @click="showFamilyHub = true">
             <text>{{ home?.currentFamily?.name }}</text>
             <text class="chevron">⌄</text>
           </button>
@@ -412,27 +451,27 @@ async function saveFamily() {
       <view v-if="loading && !needsProfileName" class="home-skeleton" aria-label="加载中">
         <view class="skeleton-dashboard skeleton-surface">
           <view class="skeleton-copy">
-            <view class="skeleton-line tiny"></view>
-            <view class="skeleton-line title"></view>
-            <view class="skeleton-line medium"></view>
+            <SkeletonBlock width="128rpx" height="24rpx" />
+            <SkeletonBlock width="246rpx" height="58rpx" radius="20rpx" class="mt-20" />
+            <SkeletonBlock width="320rpx" height="28rpx" class="mt-18" />
           </view>
-          <view class="skeleton-meter"></view>
+          <SkeletonBlock width="116rpx" height="108rpx" radius="28rpx" class="skeleton-meter-abs" />
           <view class="skeleton-metrics">
-            <view class="skeleton-chip"></view>
-            <view class="skeleton-chip"></view>
+            <SkeletonBlock height="78rpx" radius="28rpx" />
+            <SkeletonBlock height="78rpx" radius="28rpx" />
           </view>
         </view>
 
-        <view class="skeleton-search skeleton-surface"></view>
+        <SkeletonBlock height="88rpx" radius="28rpx" class="skeleton-surface" />
 
         <view class="skeleton-list skeleton-surface">
           <view v-for="index in 5" :key="index" class="skeleton-item">
-            <view class="skeleton-thumb"></view>
+            <SkeletonBlock width="76rpx" height="76rpx" radius="18rpx" />
             <view class="skeleton-item-copy">
-              <view class="skeleton-line name"></view>
-              <view class="skeleton-line meta"></view>
+              <SkeletonBlock width="220rpx" height="30rpx" radius="12rpx" />
+              <SkeletonBlock width="320rpx" height="24rpx" radius="12rpx" class="mt-18" />
             </view>
-            <view class="skeleton-pill"></view>
+            <SkeletonBlock width="104rpx" height="44rpx" />
           </view>
         </view>
       </view>
@@ -546,7 +585,7 @@ async function saveFamily() {
       @primary="saveProfile"
     >
       <view class="glass-modal-field">
-        <input class="glass-modal-input" v-model="profileNameInput" placeholder="你的昵称" placeholder-class="glass-modal-placeholder" :focus="needsProfileName" />
+        <input class="glass-modal-input" v-model="profileNameInput" placeholder="你的昵称" placeholder-class="glass-modal-placeholder" :focus="profileInputFocus" />
       </view>
     </GlassModal>
 
@@ -566,6 +605,17 @@ async function saveFamily() {
         <input class="glass-modal-input" v-model="familyNameInput" placeholder="家庭名称" placeholder-class="glass-modal-placeholder" />
       </view>
     </GlassModal>
+
+    <FamilyHub
+      :show="showFamilyHub"
+      :families="familyHubFamilies"
+      :current-family-id="currentFamilyId"
+      :current-user-id="currentUserId"
+      @close="showFamilyHub = false"
+      @switched="handleFamilySwitched"
+      @renamed="handleFamilyRenamed"
+      @create-family="handleCreateFromHub"
+    />
   </view>
 </template>
 
@@ -1215,57 +1265,10 @@ async function saveFamily() {
   width: 64%;
 }
 
-.skeleton-line,
-.skeleton-meter,
-.skeleton-chip,
-.skeleton-search,
-.skeleton-thumb,
-.skeleton-pill {
-  position: relative;
-  overflow: hidden;
-  border-radius: 999rpx;
-  background: rgba(255, 255, 255, 0.54);
-}
-
-.skeleton-line::after,
-.skeleton-meter::after,
-.skeleton-chip::after,
-.skeleton-search::after,
-.skeleton-thumb::after,
-.skeleton-pill::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0.72) 48%, transparent 100%);
-  transform: translateX(-100%);
-  animation: skeleton-shimmer 1.45s ease-in-out infinite;
-}
-
-.skeleton-line.tiny {
-  width: 128rpx;
-  height: 24rpx;
-}
-
-.skeleton-line.title {
-  width: 246rpx;
-  height: 58rpx;
-  margin-top: 20rpx;
-  border-radius: 20rpx;
-}
-
-.skeleton-line.medium {
-  width: 320rpx;
-  height: 28rpx;
-  margin-top: 18rpx;
-}
-
-.skeleton-meter {
+.skeleton-meter-abs {
   position: absolute;
   top: 34rpx;
   right: 34rpx;
-  width: 116rpx;
-  height: 108rpx;
-  border-radius: 28rpx;
 }
 
 .skeleton-metrics {
@@ -1273,16 +1276,6 @@ async function saveFamily() {
   grid-template-columns: repeat(2, 1fr);
   gap: 16rpx;
   margin-top: 54rpx;
-}
-
-.skeleton-chip {
-  height: 78rpx;
-  border-radius: 28rpx;
-}
-
-.skeleton-search {
-  height: 88rpx;
-  border-radius: 28rpx;
 }
 
 .skeleton-list {
@@ -1305,41 +1298,17 @@ async function saveFamily() {
   border-bottom: 0;
 }
 
-.skeleton-thumb {
-  flex: 0 0 auto;
-  width: 76rpx;
-  height: 76rpx;
-  border-radius: 18rpx;
-}
-
 .skeleton-item-copy {
   flex: 1;
   min-width: 0;
 }
 
-.skeleton-line.name {
-  width: 220rpx;
-  height: 30rpx;
-  border-radius: 12rpx;
-}
-
-.skeleton-line.meta {
-  width: 320rpx;
-  height: 24rpx;
+.mt-18 {
   margin-top: 18rpx;
-  border-radius: 12rpx;
 }
 
-.skeleton-pill {
-  flex: 0 0 auto;
-  width: 104rpx;
-  height: 44rpx;
-}
-
-@keyframes skeleton-shimmer {
-  to {
-    transform: translateX(100%);
-  }
+.mt-20 {
+  margin-top: 20rpx;
 }
 
 .glass-modal-field {

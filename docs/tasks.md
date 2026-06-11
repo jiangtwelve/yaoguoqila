@@ -8,7 +8,7 @@ updated: 2026-06-10
 # Tasks
 
 ## Current
-- TASK-012: 家庭切换功能。`release: v0.1`
+- TASK-012: 家庭切换与家庭管理（实现完成，待验收）。`release: v0.1`
 
 ## Ready
 - TASK-013: 图片云存储 adapter 正式接入。`release: v0.1`

@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue';
 import { onLoad, onPullDownRefresh, onShow } from '@dcloudio/uni-app';
 import AppNavBar from '@/components/AppNavBar.vue';
+import SkeletonBlock from '@/components/SkeletonBlock.vue';
 import type { Item, ItemDetail } from '@/domain/models';
 import { daysUntil } from '@/domain/expiry';
 import { consumeItem, deleteItem, getItemDetail } from '@/services/homeService';
@@ -242,22 +243,22 @@ function previewImage(index: number) {
     <view class="shell" :style="shellStyle">
       <view v-if="loading" class="detail-skeleton" aria-label="加载中">
         <view class="skeleton-hero skeleton-surface">
-          <view class="skeleton-photo"></view>
-          <view class="skeleton-line tiny"></view>
-          <view class="skeleton-line title"></view>
-          <view class="skeleton-line medium"></view>
+          <SkeletonBlock width="160rpx" height="160rpx" radius="28rpx" />
+          <SkeletonBlock width="80rpx" height="22rpx" class="sk-mt-14" />
+          <SkeletonBlock width="200rpx" height="48rpx" radius="14rpx" class="sk-mt-14" />
+          <SkeletonBlock width="260rpx" height="26rpx" class="sk-mt-14" />
         </view>
 
         <view class="skeleton-panel skeleton-surface">
-          <view class="skeleton-line tiny"></view>
-          <view class="skeleton-line date"></view>
-          <view class="skeleton-line medium"></view>
+          <SkeletonBlock width="80rpx" height="22rpx" />
+          <SkeletonBlock width="180rpx" height="36rpx" radius="12rpx" class="sk-mt-16" />
+          <SkeletonBlock width="260rpx" height="26rpx" class="sk-mt-14" />
         </view>
 
         <view class="skeleton-panel skeleton-surface">
-          <view class="skeleton-line tiny"></view>
-          <view class="skeleton-row"></view>
-          <view class="skeleton-row short"></view>
+          <SkeletonBlock width="80rpx" height="22rpx" />
+          <SkeletonBlock height="64rpx" radius="16rpx" class="sk-mt-16" />
+          <SkeletonBlock width="60%" height="64rpx" radius="16rpx" class="sk-mt-12" />
         </view>
       </view>
 
@@ -461,75 +462,16 @@ button::after {
   border-radius: 32rpx;
 }
 
-.skeleton-photo,
-.skeleton-line,
-.skeleton-row {
-  position: relative;
-  overflow: hidden;
-  background: rgba(255, 255, 255, 0.58);
+.sk-mt-12 {
+  margin-top: 12rpx;
 }
 
-.skeleton-photo::after,
-.skeleton-line::after,
-.skeleton-row::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0.74) 48%, transparent 100%);
-  transform: translateX(-100%);
-  animation: skeleton-shimmer 1.45s ease-in-out infinite;
-}
-
-.skeleton-photo {
-  width: 100%;
-  height: 356rpx;
-  border-radius: 26rpx;
-}
-
-.skeleton-line {
-  border-radius: 999rpx;
-}
-
-.skeleton-line.tiny {
-  width: 156rpx;
-  height: 24rpx;
-  margin-top: 24rpx;
-}
-
-.skeleton-line.title {
-  width: 300rpx;
-  height: 54rpx;
-  margin-top: 16rpx;
-  border-radius: 18rpx;
-}
-
-.skeleton-line.medium {
-  width: 380rpx;
-  height: 28rpx;
-  margin-top: 16rpx;
-}
-
-.skeleton-line.date {
-  width: 220rpx;
-  height: 40rpx;
+.sk-mt-14 {
   margin-top: 14rpx;
-  border-radius: 14rpx;
 }
 
-.skeleton-row {
-  height: 32rpx;
-  margin-top: 24rpx;
-  border-radius: 12rpx;
-}
-
-.skeleton-row.short {
-  width: 68%;
-}
-
-@keyframes skeleton-shimmer {
-  to {
-    transform: translateX(100%);
-  }
+.sk-mt-16 {
+  margin-top: 16rpx;
 }
 
 .detail-stack {

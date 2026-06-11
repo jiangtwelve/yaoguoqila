@@ -1,5 +1,21 @@
 import { getItemStatus, sortByExpiry } from '@/domain/expiry';
-import type { CreateFamilyInput, Family, FamilyHome, Item, ItemDetail, ItemFormOptions, ItemInput, UpdateProfileInput, User } from '@/domain/models';
+import type {
+  CreateFamilyInput,
+  DissolveFamilyInput,
+  Family,
+  FamilyHome,
+  FamilyMemberInfo,
+  Item,
+  ItemDetail,
+  ItemFormOptions,
+  ItemInput,
+  LeaveFamilyInput,
+  RemoveMemberInput,
+  RenameFamilyInput,
+  SwitchFamilyInput,
+  UpdateProfileInput,
+  User
+} from '@/domain/models';
 import { mockFamilies, mockUser } from '@/fixtures/families';
 import { mockItems, mockLocations } from '@/fixtures/items';
 import type { HomeRepository } from '@/services/contracts/homeRepository';
@@ -42,12 +58,45 @@ export class MockHomeRepository implements HomeRepository {
       name: input.name,
       avatarUrl: null,
       createdBy: user.id,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      role: 'owner'
     };
 
     families = [family, ...families];
 
     return family;
+  }
+
+  async switchFamily(input: SwitchFamilyInput): Promise<{ familyId: string }> {
+    return { familyId: input.familyId };
+  }
+
+  async renameFamily(input: RenameFamilyInput): Promise<Family> {
+    const updated = families.map((f) =>
+      f.id === input.familyId ? { ...f, name: input.name } : f
+    );
+    families = updated;
+    return families.find((f) => f.id === input.familyId)!;
+  }
+
+  async getMembers(_familyId: string): Promise<FamilyMemberInfo[]> {
+    return [
+      { userId: user.id, displayName: user.displayName || '我', role: 'owner', joinedAt: new Date().toISOString() }
+    ];
+  }
+
+  async removeMember(input: RemoveMemberInput): Promise<{ familyId: string; userId: string }> {
+    return { familyId: input.familyId, userId: input.userId };
+  }
+
+  async leaveFamily(input: LeaveFamilyInput): Promise<{ familyId: string; dissolved: boolean }> {
+    families = families.filter((f) => f.id !== input.familyId);
+    return { familyId: input.familyId, dissolved: false };
+  }
+
+  async dissolveFamily(input: DissolveFamilyInput): Promise<{ familyId: string }> {
+    families = families.filter((f) => f.id !== input.familyId);
+    return { familyId: input.familyId };
   }
 
   async getItemFormOptions(): Promise<ItemFormOptions> {

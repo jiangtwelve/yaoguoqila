@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import AppNavBar from '@/components/AppNavBar.vue';
 import GlassModal from '@/components/GlassModal.vue';
+import SkeletonBlock from '@/components/SkeletonBlock.vue';
 import type { ExpiryInputMode, Item, ItemFormOptions, ItemInput, ShelfLifeUnit } from '@/domain/models';
 import { createItem, getItemDetail, getItemFormOptions, updateItem } from '@/services/homeService';
 import { getNavigationSafeArea } from '@/utils/navigationSafeArea';
@@ -368,30 +369,30 @@ function goBack() {
       <view v-if="loading && isEditing" class="form-skeleton" aria-label="加载中">
         <view class="skeleton-photo-field skeleton-surface">
           <view class="skeleton-photo-grid">
-            <view class="skeleton-photo-tile"></view>
-            <view class="skeleton-photo-tile"></view>
-            <view class="skeleton-photo-tile soft"></view>
+            <SkeletonBlock width="140rpx" height="140rpx" radius="20rpx" />
+            <SkeletonBlock width="140rpx" height="140rpx" radius="20rpx" />
+            <SkeletonBlock width="140rpx" height="140rpx" radius="20rpx" class="skeleton-soft" />
           </view>
         </view>
 
         <view class="skeleton-field skeleton-surface">
-          <view class="skeleton-line label"></view>
-          <view class="skeleton-line input"></view>
+          <SkeletonBlock width="80rpx" height="24rpx" radius="8rpx" />
+          <SkeletonBlock height="88rpx" radius="20rpx" class="sk-mt-16" />
         </view>
 
         <view class="skeleton-date skeleton-surface">
           <view class="skeleton-date-head">
-            <view class="skeleton-line label"></view>
-            <view class="skeleton-line hint"></view>
+            <SkeletonBlock width="100rpx" height="24rpx" radius="8rpx" />
+            <SkeletonBlock width="160rpx" height="20rpx" radius="8rpx" />
           </view>
-          <view class="skeleton-date-card"></view>
-          <view class="skeleton-or"></view>
-          <view class="skeleton-date-card split"></view>
+          <SkeletonBlock height="180rpx" radius="24rpx" />
+          <SkeletonBlock width="48rpx" height="28rpx" radius="999rpx" class="skeleton-or" />
+          <SkeletonBlock height="180rpx" radius="24rpx" />
         </view>
 
         <view class="skeleton-field skeleton-surface">
-          <view class="skeleton-line label"></view>
-          <view class="skeleton-line input short"></view>
+          <SkeletonBlock width="80rpx" height="24rpx" radius="8rpx" />
+          <SkeletonBlock width="60%" height="88rpx" radius="20rpx" class="sk-mt-16" />
         </view>
       </view>
 
@@ -1131,54 +1132,8 @@ function goBack() {
   gap: 14rpx;
 }
 
-.skeleton-photo-tile,
-.skeleton-line,
-.skeleton-date-card,
-.skeleton-or {
-  position: relative;
-  overflow: hidden;
-  background: rgba(255, 255, 255, 0.54);
-}
-
-.skeleton-photo-tile::after,
-.skeleton-line::after,
-.skeleton-date-card::after,
-.skeleton-or::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0.72) 48%, transparent 100%);
-  transform: translateX(-100%);
-  animation: skeleton-shimmer 1.45s ease-in-out infinite;
-}
-
-.skeleton-photo-tile {
-  aspect-ratio: 1;
-  border-radius: 22rpx;
-}
-
-.skeleton-photo-tile.soft {
+.skeleton-soft {
   opacity: 0.66;
-}
-
-.skeleton-line {
-  border-radius: 999rpx;
-}
-
-.skeleton-line.label {
-  width: 124rpx;
-  height: 24rpx;
-}
-
-.skeleton-line.input {
-  width: 72%;
-  height: 34rpx;
-  margin-top: 26rpx;
-  border-radius: 12rpx;
-}
-
-.skeleton-line.input.short {
-  width: 48%;
 }
 
 .skeleton-date-head {
@@ -1187,32 +1142,12 @@ function goBack() {
   justify-content: space-between;
 }
 
-.skeleton-line.hint {
-  width: 96rpx;
-  height: 22rpx;
-}
-
-.skeleton-date-card {
-  height: 118rpx;
-  margin-top: 24rpx;
-  border-radius: 18rpx;
-}
-
-.skeleton-date-card.split {
-  height: 138rpx;
-}
-
 .skeleton-or {
-  width: 44rpx;
-  height: 22rpx;
   margin: 20rpx auto 0;
-  border-radius: 999rpx;
 }
 
-@keyframes skeleton-shimmer {
-  to {
-    transform: translateX(100%);
-  }
+.sk-mt-16 {
+  margin-top: 16rpx;
 }
 
 .state-copy,

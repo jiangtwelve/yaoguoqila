@@ -12,6 +12,7 @@ updated: 2026-06-10
 ## Index
 
 ### 当前连续性与 TASK-012
+- `2026-06-10 TASK-012 Implementation`：家庭切换与管理功能实现完成，含云函数 6 个新 action、FamilyHub 组件、服务层扩展、首页集成。构建通过，测试 19/19 pass。待用户验收。
 - `2026-06-10 TASK-012 Scope Expansion And Design`：家庭功能合并到 TASK-012，设计统一入口和角色权限方案，邀请功能保留给 TASK-014。
 - `2026-06-10 TASK-011 Accepted`：微信开发者工具真实主流程联调验收通过，TASK-011 标记完成，当前任务切换到 TASK-012。
 - `2026-06-10 TASK-011 Acceptance UX Fixes`：验收期间修复弹窗输入框间距（slot CSS 作用域）、保存 loading（改用原生 `uni.showLoading`）、设置昵称和创建家庭 loading（统一为原生 loading）。
@@ -50,6 +51,22 @@ updated: 2026-06-10
 ### 外部状态与 CloudBase
 - 最新可行动外部状态以 `docs/handoff.md` 为准。
 - 需要追溯 CloudBase 操作历史时，读 `2026-06-09 Clean Cloud Database For Acceptance`、`2026-06-08 TASK-011 Cloud Environment Reset And Deploy`、`2026-06-08 TASK-011 Started / CloudBase MCP Prepared`。
+
+## 2026-06-10 TASK-012 Implementation
+- Goal: 实现家庭切换与家庭管理功能，含后端云函数、前端服务层、UI 组件和首页集成。
+- Changes:
+  - 云函数 `yaoguoqiApi` 新增 6 个 action：`switchFamily`、`renameFamily`、`getMembers`、`removeMember`、`leaveFamily`、`dissolveFamily`。
+  - `createFamily` 修复：同时写入 `familyMembers` 集合（role: owner）。
+  - `normalizeFamily` 扩展：返回 `role` 字段，通过 `familyMembers` 集合或 `creatorId` fallback 推导。
+  - 领域模型新增：`Family.role`、`FamilyMemberInfo`、`SwitchFamilyInput`、`RenameFamilyInput`、`RemoveMemberInput`、`LeaveFamilyInput`、`DissolveFamilyInput`。
+  - `HomeRepository` 接口、`CloudHomeRepository`、`MockHomeRepository` 均实现 6 个新方法。
+  - `wechatCloudClient.ts` 的 `CloudFunctionName` 类型扩展 6 个新 action。
+  - `homeService.ts` 新增 6 个导出函数。
+  - 新建 `FamilyHub.vue` 组件：底部面板设计，含家庭列表视图（切换/管理/创建）和管理视图（成员列表、重命名、移除/退出/解散）。
+  - 首页集成：family-button 点击打开 FamilyHub，处理切换刷新和创建跳转。
+  - Mock fixtures 更新：`mockFamilies` 添加 `role: 'owner'`。
+- Verification: `vue-tsc --noEmit` 通过，`pnpm build:mp-weixin` 成功，`pnpm test` 19/19 pass。
+- Note: 验收前需重新部署云函数 `yaoguoqiApi`。已有家庭的 `familyMembers` 集合可能为空，`normalizeFamily` 有 creatorId fallback。
 
 ## 2026-06-10 TASK-012 Scope Expansion And Design
 - Goal: 按用户要求将家庭相关功能合并到 TASK-012 统一实现，设计家庭功能统一入口和完整交互流。

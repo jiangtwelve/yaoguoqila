@@ -23,6 +23,15 @@ export interface Family {
   avatarUrl: string | null;
   createdBy: string;
   createdAt: string;
+  /** 当前用户在家庭中的角色，列表查询时填充 */
+  role?: FamilyRole;
+}
+
+export interface FamilyMemberInfo {
+  userId: string;
+  displayName: string;
+  role: FamilyRole;
+  joinedAt: string;
 }
 
 export interface FamilyMember {
@@ -119,4 +128,26 @@ export interface ItemInput {
   expiresAt: string;
   reminderDaysBefore: number[];
   note: string | null;
+}
+
+export interface SwitchFamilyInput {
+  familyId: string;
+}
+
+export interface RenameFamilyInput {
+  familyId: string;
+  name: string;
+}
+
+export interface RemoveMemberInput {
+  familyId: string;
+  userId: string;
+}
+
+export interface LeaveFamilyInput {
+  familyId: string;
+}
+
+export interface DissolveFamilyInput {
+  familyId: string;
 }

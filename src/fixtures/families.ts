@@ -17,7 +17,8 @@ export const mockFamilies: Family[] = [
     name: '小林家',
     avatarUrl: null,
     createdBy: 'user-001',
-    createdAt: '2026-06-01T08:00:00.000Z'
+    createdAt: '2026-06-01T08:00:00.000Z',
+    role: 'owner'
   }
 ];
 

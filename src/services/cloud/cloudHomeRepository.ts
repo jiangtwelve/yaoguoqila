@@ -1,4 +1,20 @@
-import type { CreateFamilyInput, Family, FamilyHome, Item, ItemDetail, ItemFormOptions, ItemInput, UpdateProfileInput, User } from '@/domain/models';
+import type {
+  CreateFamilyInput,
+  DissolveFamilyInput,
+  Family,
+  FamilyHome,
+  FamilyMemberInfo,
+  Item,
+  ItemDetail,
+  ItemFormOptions,
+  ItemInput,
+  LeaveFamilyInput,
+  RemoveMemberInput,
+  RenameFamilyInput,
+  SwitchFamilyInput,
+  UpdateProfileInput,
+  User
+} from '@/domain/models';
 import type { HomeRepository } from '@/services/contracts/homeRepository';
 import { callCloudFunction } from './wechatCloudClient';
 
@@ -20,6 +36,48 @@ export class CloudHomeRepository implements HomeRepository {
   async createFamily(input: CreateFamilyInput): Promise<Family> {
     return callCloudFunction<CreateFamilyInput, Family>({
       name: 'family.createFamily',
+      payload: input
+    });
+  }
+
+  async switchFamily(input: SwitchFamilyInput): Promise<{ familyId: string }> {
+    return callCloudFunction<SwitchFamilyInput, { familyId: string }>({
+      name: 'family.switchFamily',
+      payload: input
+    });
+  }
+
+  async renameFamily(input: RenameFamilyInput): Promise<Family> {
+    return callCloudFunction<RenameFamilyInput, Family>({
+      name: 'family.renameFamily',
+      payload: input
+    });
+  }
+
+  async getMembers(familyId: string): Promise<FamilyMemberInfo[]> {
+    return callCloudFunction<{ familyId: string }, FamilyMemberInfo[]>({
+      name: 'family.getMembers',
+      payload: { familyId }
+    });
+  }
+
+  async removeMember(input: RemoveMemberInput): Promise<{ familyId: string; userId: string }> {
+    return callCloudFunction<RemoveMemberInput, { familyId: string; userId: string }>({
+      name: 'family.removeMember',
+      payload: input
+    });
+  }
+
+  async leaveFamily(input: LeaveFamilyInput): Promise<{ familyId: string; dissolved: boolean }> {
+    return callCloudFunction<LeaveFamilyInput, { familyId: string; dissolved: boolean }>({
+      name: 'family.leaveFamily',
+      payload: input
+    });
+  }
+
+  async dissolveFamily(input: DissolveFamilyInput): Promise<{ familyId: string }> {
+    return callCloudFunction<DissolveFamilyInput, { familyId: string }>({
+      name: 'family.dissolveFamily',
       payload: input
     });
   }

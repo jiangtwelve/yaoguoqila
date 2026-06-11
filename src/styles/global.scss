@@ -7,3 +7,9 @@ page {
 button {
   font: inherit;
 }
+
+@keyframes skeleton-shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
