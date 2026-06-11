@@ -377,7 +377,7 @@ function goBack() {
 
         <view class="skeleton-field skeleton-surface">
           <SkeletonBlock width="80rpx" height="24rpx" radius="8rpx" />
-          <SkeletonBlock height="88rpx" radius="20rpx" class="sk-mt-16" />
+          <SkeletonBlock height="88rpx" radius="20rpx" />
         </view>
 
         <view class="skeleton-date skeleton-surface">
@@ -392,7 +392,7 @@ function goBack() {
 
         <view class="skeleton-field skeleton-surface">
           <SkeletonBlock width="80rpx" height="24rpx" radius="8rpx" />
-          <SkeletonBlock width="60%" height="88rpx" radius="20rpx" class="sk-mt-16" />
+          <SkeletonBlock width="60%" height="88rpx" radius="20rpx" />
         </view>
       </view>
 
@@ -1102,7 +1102,7 @@ function goBack() {
 .form-skeleton {
   display: flex;
   flex-direction: column;
-  gap: 18rpx;
+  gap: 24rpx;
   margin-top: 24rpx;
 }
 
@@ -1118,7 +1118,10 @@ function goBack() {
 .skeleton-photo-field,
 .skeleton-field,
 .skeleton-date {
-  padding: 24rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+  padding: 28rpx;
   border-radius: 32rpx;
 }
 
@@ -1143,12 +1146,9 @@ function goBack() {
 }
 
 .skeleton-or {
-  margin: 20rpx auto 0;
+  margin: 0 auto;
 }
 
-.sk-mt-16 {
-  margin-top: 16rpx;
-}
 
 .state-copy,
 .error {

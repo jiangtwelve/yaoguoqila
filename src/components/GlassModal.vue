@@ -66,7 +66,8 @@ function handleBackdrop() {
 .glass-modal-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 50;
+  /* 高于 FamilyHub（50）及其内部重命名弹窗（60），保证通用弹窗始终在最上层 */
+  z-index: 70;
   display: flex;
   align-items: center;
   justify-content: center;

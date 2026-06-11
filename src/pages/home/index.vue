@@ -38,6 +38,8 @@ const savingProfile = ref(false);
 const familyNameInput = ref('');
 const savingFamily = ref(false);
 const showFamilyHub = ref(false);
+const createdFromHub = ref(false);
+const newFamilyId = ref('');
 const profileInputFocus = ref(false);
 
 const hasFamily = computed(() => Boolean(home.value?.currentFamily));
@@ -383,24 +385,26 @@ async function saveFamily() {
   savingFamily.value = true;
   void uni.showLoading({ title: '保存中', mask: true });
   try {
-    await createFamily({ name });
+    const family = await createFamily({ name });
     showCreateFamily.value = false;
     familyNameInput.value = '';
     search.value = '';
     await loadHome();
     uni.hideLoading();
     void uni.showToast({ title: '家庭已创建', icon: 'success' });
+    /** 从 Hub 创建时，等 DOM 渲染后再滚动到新家庭卡片 */
+    if (createdFromHub.value) {
+      await nextTick();
+      newFamilyId.value = family.id;
+    }
   } catch (error) {
     uni.hideLoading();
-    const message = error instanceof Error ? error.message : '创建失败';
-    void uni.showModal({
-      title: '创建失败',
-      content: message,
-      showCancel: false,
-      confirmText: '知道了'
-    });
+    const rawMessage = error instanceof Error ? error.message : '';
+    const message = rawMessage.includes('同名') ? '家庭名称重复' : (rawMessage || '创建失败');
+    void uni.showToast({ title: message, icon: 'none' });
   } finally {
     savingFamily.value = false;
+    createdFromHub.value = false;
   }
 }
 
@@ -417,9 +421,9 @@ async function handleFamilyRenamed() {
   await loadHome();
 }
 
-/** 从 FamilyHub 跳转到创建家庭弹窗 */
+/** 从 FamilyHub 跳转到创建家庭弹窗（不关闭 Hub，创建弹窗覆盖在上面） */
 function handleCreateFromHub() {
-  showFamilyHub.value = false;
+  createdFromHub.value = true;
   showCreateFamily.value = true;
   familyNameInput.value = '';
 }
@@ -452,8 +456,8 @@ function handleCreateFromHub() {
         <view class="skeleton-dashboard skeleton-surface">
           <view class="skeleton-copy">
             <SkeletonBlock width="128rpx" height="24rpx" />
-            <SkeletonBlock width="246rpx" height="58rpx" radius="20rpx" class="mt-20" />
-            <SkeletonBlock width="320rpx" height="28rpx" class="mt-18" />
+            <SkeletonBlock width="246rpx" height="58rpx" radius="20rpx" />
+            <SkeletonBlock width="320rpx" height="28rpx" />
           </view>
           <SkeletonBlock width="116rpx" height="108rpx" radius="28rpx" class="skeleton-meter-abs" />
           <view class="skeleton-metrics">
@@ -469,7 +473,7 @@ function handleCreateFromHub() {
             <SkeletonBlock width="76rpx" height="76rpx" radius="18rpx" />
             <view class="skeleton-item-copy">
               <SkeletonBlock width="220rpx" height="30rpx" radius="12rpx" />
-              <SkeletonBlock width="320rpx" height="24rpx" radius="12rpx" class="mt-18" />
+              <SkeletonBlock width="320rpx" height="24rpx" radius="12rpx" />
             </view>
             <SkeletonBlock width="104rpx" height="44rpx" />
           </view>
@@ -611,6 +615,7 @@ function handleCreateFromHub() {
       :families="familyHubFamilies"
       :current-family-id="currentFamilyId"
       :current-user-id="currentUserId"
+      :scroll-to-family-id="newFamilyId"
       @close="showFamilyHub = false"
       @switched="handleFamilySwitched"
       @renamed="handleFamilyRenamed"
@@ -1262,6 +1267,9 @@ function handleCreateFromHub() {
 }
 
 .skeleton-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
   width: 64%;
 }
 
@@ -1299,16 +1307,11 @@ function handleCreateFromHub() {
 }
 
 .skeleton-item-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 14rpx;
   flex: 1;
   min-width: 0;
-}
-
-.mt-18 {
-  margin-top: 18rpx;
-}
-
-.mt-20 {
-  margin-top: 20rpx;
 }
 
 .glass-modal-field {

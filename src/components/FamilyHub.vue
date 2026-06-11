@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import type { Family, FamilyMemberInfo } from '@/domain/models';
 import SkeletonBlock from '@/components/SkeletonBlock.vue';
 import {
@@ -16,6 +16,7 @@ const props = defineProps<{
   families: Family[];
   currentFamilyId: string;
   currentUserId: string;
+  scrollToFamilyId?: string;
 }>();
 
 const emit = defineEmits<{
@@ -44,6 +45,20 @@ const managedFamily = computed(() =>
 /** 当前用户是否为管理员 */
 const isOwner = computed(() => managedFamily.value?.role === 'owner');
 
+/** 滚动到指定家庭卡片 */
+const scrollIntoViewId = ref('');
+
+watch(
+  () => props.scrollToFamilyId,
+  async (id) => {
+    if (!id) return;
+    /** 等待 families 列表重新渲染 */
+    await nextTick();
+    await nextTick();
+    scrollIntoViewId.value = id;
+  }
+);
+
 /** 打开面板时重置视图 */
 watch(
   () => props.show,
@@ -52,6 +67,7 @@ watch(
       view.value = 'list';
       managedFamilyId.value = '';
       members.value = [];
+      scrollIntoViewId.value = '';
     }
   }
 );
@@ -249,10 +265,11 @@ async function doDissolve() {
           <text class="hub-title">切换家庭</text>
         </view>
 
-        <scroll-view class="hub-family-list" scroll-y>
+        <scroll-view class="hub-family-list" scroll-y :scroll-into-view="scrollIntoViewId">
           <view
             v-for="family in families"
             :key="family.id"
+            :id="family.id"
             class="hub-family-card"
             :class="{ active: family.id === currentFamilyId }"
           >

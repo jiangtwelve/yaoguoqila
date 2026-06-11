@@ -244,21 +244,21 @@ function previewImage(index: number) {
       <view v-if="loading" class="detail-skeleton" aria-label="加载中">
         <view class="skeleton-hero skeleton-surface">
           <SkeletonBlock width="160rpx" height="160rpx" radius="28rpx" />
-          <SkeletonBlock width="80rpx" height="22rpx" class="sk-mt-14" />
-          <SkeletonBlock width="200rpx" height="48rpx" radius="14rpx" class="sk-mt-14" />
-          <SkeletonBlock width="260rpx" height="26rpx" class="sk-mt-14" />
+          <SkeletonBlock width="80rpx" height="22rpx" />
+          <SkeletonBlock width="200rpx" height="48rpx" radius="14rpx" />
+          <SkeletonBlock width="260rpx" height="26rpx" />
         </view>
 
         <view class="skeleton-panel skeleton-surface">
           <SkeletonBlock width="80rpx" height="22rpx" />
-          <SkeletonBlock width="180rpx" height="36rpx" radius="12rpx" class="sk-mt-16" />
-          <SkeletonBlock width="260rpx" height="26rpx" class="sk-mt-14" />
+          <SkeletonBlock width="180rpx" height="36rpx" radius="12rpx" />
+          <SkeletonBlock width="260rpx" height="26rpx" />
         </view>
 
         <view class="skeleton-panel skeleton-surface">
           <SkeletonBlock width="80rpx" height="22rpx" />
-          <SkeletonBlock height="64rpx" radius="16rpx" class="sk-mt-16" />
-          <SkeletonBlock width="60%" height="64rpx" radius="16rpx" class="sk-mt-12" />
+          <SkeletonBlock height="64rpx" radius="16rpx" />
+          <SkeletonBlock width="60%" height="64rpx" radius="16rpx" />
         </view>
       </view>
 
@@ -453,25 +453,20 @@ button::after {
 }
 
 .skeleton-hero {
-  padding: 22rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14rpx;
+  padding: 28rpx;
   border-radius: 32rpx;
 }
 
 .skeleton-panel {
-  padding: 24rpx 28rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+  padding: 28rpx;
   border-radius: 32rpx;
-}
-
-.sk-mt-12 {
-  margin-top: 12rpx;
-}
-
-.sk-mt-14 {
-  margin-top: 14rpx;
-}
-
-.sk-mt-16 {
-  margin-top: 16rpx;
 }
 
 .detail-stack {
