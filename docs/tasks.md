@@ -2,7 +2,7 @@
 status: active
 current_task: TASK-012
 current_release: v0.1
-updated: 2026-06-10
+updated: 2026-06-11
 ---
 
 # Tasks
@@ -19,6 +19,7 @@ updated: 2026-06-10
 - 暂无。
 
 ## Backlog
+- TASK-016: 云函数结构模块化与领域拆分评估。`post-v0.1`
 - 首页大数据量列表策略设计：近期优先、分组折叠/懒加载，必要时配合游标分页和虚拟列表。`deferred`
 - 家庭成员邀请与权限细分。`v0.3 candidate`
 - 微信订阅消息正式模板配置。

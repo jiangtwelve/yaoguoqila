@@ -12,6 +12,9 @@ import { consumeHomeRefreshRequest } from '@/utils/pageRefresh';
 import { MOCK_PULL_DOWN_REFRESH_FAILURE, waitForFailedRefreshIndicator, waitForMinimumRefreshIndicator } from '@/utils/pullDownRefresh';
 
 type PullRefreshState = 'idle' | 'refreshing' | 'failed';
+type DissolvedFamilyPayload = { familyId: string; wasCurrent: boolean };
+
+const MAX_FAMILY_NAME_LENGTH = 12;
 
 const loading = ref(true);
 const errorMessage = ref('');
@@ -38,8 +41,6 @@ const savingProfile = ref(false);
 const familyNameInput = ref('');
 const savingFamily = ref(false);
 const showFamilyHub = ref(false);
-const createdFromHub = ref(false);
-const newFamilyId = ref('');
 const profileInputFocus = ref(false);
 
 const hasFamily = computed(() => Boolean(home.value?.currentFamily));
@@ -381,22 +382,22 @@ async function saveProfile() {
 async function saveFamily() {
   const name = familyNameInput.value.trim();
   if (!name || savingFamily.value) return;
+  if (name.length > MAX_FAMILY_NAME_LENGTH) {
+    void uni.showToast({ title: `家庭名称最多 ${MAX_FAMILY_NAME_LENGTH} 个字`, icon: 'none' });
+    return;
+  }
 
   savingFamily.value = true;
   void uni.showLoading({ title: '保存中', mask: true });
   try {
     const family = await createFamily({ name });
     showCreateFamily.value = false;
+    showFamilyHub.value = false;
     familyNameInput.value = '';
     search.value = '';
     await loadHome();
     uni.hideLoading();
-    void uni.showToast({ title: '家庭已创建', icon: 'success' });
-    /** 从 Hub 创建时，等 DOM 渲染后再滚动到新家庭卡片 */
-    if (createdFromHub.value) {
-      await nextTick();
-      newFamilyId.value = family.id;
-    }
+    void uni.showToast({ title: `已切换到「${family.name}」`, icon: 'success' });
   } catch (error) {
     uni.hideLoading();
     const rawMessage = error instanceof Error ? error.message : '';
@@ -404,8 +405,13 @@ async function saveFamily() {
     void uni.showToast({ title: message, icon: 'none' });
   } finally {
     savingFamily.value = false;
-    createdFromHub.value = false;
   }
+}
+
+/** 取消创建家庭：从 Hub 发起时只关闭创建弹窗，露出下方家庭切换弹窗 */
+function cancelCreateFamily() {
+  showCreateFamily.value = false;
+  familyNameInput.value = '';
 }
 
 /** 家庭切换或管理操作后刷新首页数据 */
@@ -416,6 +422,26 @@ async function handleFamilySwitched() {
   uni.hideLoading();
 }
 
+/** 解散家庭后保留 FamilyHub 上下文，并按是否影响当前家庭决定首页刷新 */
+async function handleFamilyDissolved(payload: DissolvedFamilyPayload) {
+  if (!home.value) return;
+
+  if (!payload.wasCurrent) {
+    home.value = {
+      ...home.value,
+      families: home.value.families.filter((family) => family.id !== payload.familyId)
+    };
+    return;
+  }
+
+  search.value = '';
+  await loadHome();
+
+  if (!home.value?.currentFamily) {
+    showFamilyHub.value = false;
+  }
+}
+
 /** 重命名后静默刷新首页数据（不关闭 FamilyHub） */
 async function handleFamilyRenamed() {
   await loadHome();
@@ -423,7 +449,6 @@ async function handleFamilyRenamed() {
 
 /** 从 FamilyHub 跳转到创建家庭弹窗（不关闭 Hub，创建弹窗覆盖在上面） */
 function handleCreateFromHub() {
-  createdFromHub.value = true;
   showCreateFamily.value = true;
   familyNameInput.value = '';
 }
@@ -466,7 +491,10 @@ function handleCreateFromHub() {
           </view>
         </view>
 
-        <SkeletonBlock height="88rpx" radius="28rpx" class="skeleton-surface" />
+        <view class="skeleton-search skeleton-surface">
+          <view class="skeleton-search-mark"></view>
+          <view class="skeleton-search-line"></view>
+        </view>
 
         <view class="skeleton-list skeleton-surface">
           <view v-for="index in 5" :key="index" class="skeleton-item">
@@ -601,12 +629,12 @@ function handleCreateFromHub() {
       title="创建家庭"
       secondary-text="取消"
       primary-text="创建"
-      :primary-disabled="!familyNameInput.trim()"
-      @secondary="showCreateFamily = false"
+      :primary-disabled="!familyNameInput.trim() || familyNameInput.trim().length > MAX_FAMILY_NAME_LENGTH"
+      @secondary="cancelCreateFamily"
       @primary="saveFamily"
     >
       <view class="glass-modal-field">
-        <input class="glass-modal-input" v-model="familyNameInput" placeholder="家庭名称" placeholder-class="glass-modal-placeholder" />
+        <input class="glass-modal-input" v-model="familyNameInput" placeholder="家庭名称" placeholder-class="glass-modal-placeholder" :maxlength="MAX_FAMILY_NAME_LENGTH" />
       </view>
     </GlassModal>
 
@@ -615,10 +643,11 @@ function handleCreateFromHub() {
       :families="familyHubFamilies"
       :current-family-id="currentFamilyId"
       :current-user-id="currentUserId"
-      :scroll-to-family-id="newFamilyId"
+      :scroll-to-family-id="currentFamilyId"
       @close="showFamilyHub = false"
       @switched="handleFamilySwitched"
       @renamed="handleFamilyRenamed"
+      @dissolved="handleFamilyDissolved"
       @create-family="handleCreateFromHub"
     />
   </view>
@@ -1284,6 +1313,32 @@ function handleCreateFromHub() {
   grid-template-columns: repeat(2, 1fr);
   gap: 16rpx;
   margin-top: 54rpx;
+}
+
+.skeleton-search {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  height: 88rpx;
+  padding: 0 24rpx;
+  border-radius: 28rpx;
+  background: rgba(255, 255, 255, 0.24);
+  box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.66);
+}
+
+.skeleton-search-mark {
+  width: 30rpx;
+  height: 30rpx;
+  border: 3rpx solid rgba(16, 20, 24, 0.08);
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+
+.skeleton-search-line {
+  width: 190rpx;
+  height: 24rpx;
+  border-radius: 999rpx;
+  background: rgba(16, 20, 24, 0.045);
 }
 
 .skeleton-list {

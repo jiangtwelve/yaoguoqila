@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue';
 import type { Family, FamilyMemberInfo } from '@/domain/models';
+import GlassModal from '@/components/GlassModal.vue';
 import SkeletonBlock from '@/components/SkeletonBlock.vue';
 import {
   dissolveFamilyGroup,
@@ -23,19 +24,30 @@ const emit = defineEmits<{
   (event: 'close'): void;
   (event: 'switched'): void;
   (event: 'renamed'): void;
+  (event: 'dissolved', payload: DissolvedPayload): void;
   (event: 'create-family'): void;
 }>();
 
 type HubView = 'list' | 'manage';
+type FamilyListScrollEvent = { detail?: { scrollTop?: number } };
+type DissolvedPayload = { familyId: string; wasCurrent: boolean };
+
+const MAX_FAMILY_NAME_LENGTH = 12;
 
 const view = ref<HubView>('list');
 const managedFamilyId = ref('');
 const renameInput = ref('');
+const renameInputFocus = ref(false);
 const renaming = ref(false);
 const showRename = ref(false);
 const members = ref<FamilyMemberInfo[]>([]);
+const memberErrorMessage = ref('');
 const loadingMembers = ref(false);
 const actionLoading = ref(false);
+const scrollIntoViewId = ref('');
+const familyListRestoreTop = ref(0);
+const shouldAutoScrollToCurrent = ref(false);
+let familyListScrollTopSnapshot = 0;
 
 /** 当前正在管理的家庭 */
 const managedFamily = computed(() =>
@@ -45,17 +57,39 @@ const managedFamily = computed(() =>
 /** 当前用户是否为管理员 */
 const isOwner = computed(() => managedFamily.value?.role === 'owner');
 
+/** 重命名确认按钮是否可用 */
+const canConfirmRename = computed(() => {
+  const name = renameInput.value.trim();
+  return Boolean(name) && name.length <= MAX_FAMILY_NAME_LENGTH && !renaming.value;
+});
+
 /** 滚动到指定家庭卡片 */
-const scrollIntoViewId = ref('');
+async function queueScrollToFamily(familyId: string) {
+  if (!familyId) return;
+
+  scrollIntoViewId.value = '';
+  /** 等待列表和 scroll-view 状态稳定后再设置目标节点 */
+  await nextTick();
+  await nextTick();
+  scrollIntoViewId.value = getFamilyCardId(familyId);
+}
+
+/** 生成家庭卡片节点 ID，避免原始 ID 与页面其它节点冲突 */
+function getFamilyCardId(familyId: string) {
+  return `family-card-${familyId}`;
+}
 
 watch(
   () => props.scrollToFamilyId,
-  async (id) => {
-    if (!id) return;
-    /** 等待 families 列表重新渲染 */
-    await nextTick();
-    await nextTick();
-    scrollIntoViewId.value = id;
+  (id) => {
+    if (props.show && shouldAutoScrollToCurrent.value && id) void queueScrollToFamily(id);
+  }
+);
+
+watch(
+  () => props.currentFamilyId,
+  (id) => {
+    if (props.show && view.value === 'list' && shouldAutoScrollToCurrent.value) void queueScrollToFamily(id);
   }
 );
 
@@ -67,10 +101,19 @@ watch(
       view.value = 'list';
       managedFamilyId.value = '';
       members.value = [];
-      scrollIntoViewId.value = '';
+      memberErrorMessage.value = '';
+      familyListScrollTopSnapshot = 0;
+      familyListRestoreTop.value = 0;
+      shouldAutoScrollToCurrent.value = true;
+      void queueScrollToFamily(props.scrollToFamilyId || props.currentFamilyId);
     }
   }
 );
+
+/** 只记录原生滚动位置快照，不在滚动过程中触发响应式回写 */
+function snapshotFamilyListScroll(event: FamilyListScrollEvent) {
+  familyListScrollTopSnapshot = event.detail?.scrollTop ?? familyListScrollTopSnapshot;
+}
 
 /** 关闭面板 */
 function close() {
@@ -80,25 +123,33 @@ function close() {
 /** 切换到管理视图 */
 function openManage(familyId: string) {
   managedFamilyId.value = familyId;
+  scrollIntoViewId.value = '';
+  shouldAutoScrollToCurrent.value = false;
   view.value = 'manage';
   void loadMembers();
 }
 
 /** 返回家庭列表 */
-function backToList() {
+async function backToList() {
   view.value = 'list';
   managedFamilyId.value = '';
   members.value = [];
+  memberErrorMessage.value = '';
+  familyListRestoreTop.value = 0;
+  await nextTick();
+  familyListRestoreTop.value = familyListScrollTopSnapshot;
 }
 
 /** 加载成员列表（初次加载显示骨架屏） */
 async function loadMembers() {
   if (!managedFamilyId.value) return;
   loadingMembers.value = true;
+  memberErrorMessage.value = '';
   try {
     members.value = await getFamilyMembers(managedFamilyId.value);
-  } catch {
+  } catch (error) {
     members.value = [];
+    memberErrorMessage.value = error instanceof Error ? error.message : '成员加载失败';
   } finally {
     loadingMembers.value = false;
   }
@@ -109,9 +160,10 @@ async function refreshMembers() {
   if (!managedFamilyId.value) return;
   void uni.showLoading({ title: '刷新中', mask: true });
   try {
+    memberErrorMessage.value = '';
     members.value = await getFamilyMembers(managedFamilyId.value);
-  } catch {
-    /* ignore */
+  } catch (error) {
+    memberErrorMessage.value = error instanceof Error ? error.message : '成员加载失败';
   } finally {
     uni.hideLoading();
   }
@@ -136,20 +188,36 @@ async function handleSwitch(familyId: string) {
 /** 打开重命名弹窗 */
 function openRename() {
   renameInput.value = managedFamily.value?.name ?? '';
+  renameInputFocus.value = false;
   showRename.value = true;
+  void nextTick().then(() => {
+    setTimeout(() => {
+      renameInputFocus.value = true;
+    }, 160);
+  });
+}
+
+/** 关闭重命名弹窗 */
+function closeRename() {
+  showRename.value = false;
+  renameInputFocus.value = false;
 }
 
 /** 确认重命名 */
 async function confirmRename() {
   const name = renameInput.value.trim();
   if (!name || !managedFamilyId.value || renaming.value) return;
+  if (name.length > MAX_FAMILY_NAME_LENGTH) {
+    void uni.showToast({ title: `家庭名称最多 ${MAX_FAMILY_NAME_LENGTH} 个字`, icon: 'none' });
+    return;
+  }
 
   renaming.value = true;
   void uni.showLoading({ title: '保存中', mask: true });
   try {
     await renameFamily({ familyId: managedFamilyId.value, name });
     uni.hideLoading();
-    showRename.value = false;
+    closeRename();
     void uni.showToast({ title: '已重命名', icon: 'success' });
     emit('renamed');
   } catch (error) {
@@ -242,11 +310,13 @@ async function doDissolve() {
   actionLoading.value = true;
   void uni.showLoading({ title: '解散中', mask: true });
   try {
-    await dissolveFamilyGroup({ familyId: managedFamilyId.value });
+    const familyId = managedFamilyId.value;
+    const wasCurrent = familyId === props.currentFamilyId;
+    await dissolveFamilyGroup({ familyId });
     uni.hideLoading();
     void uni.showToast({ title: '已解散', icon: 'success' });
     backToList();
-    emit('switched');
+    emit('dissolved', { familyId, wasCurrent });
   } catch (error) {
     uni.hideLoading();
     void uni.showToast({ title: error instanceof Error ? error.message : '操作失败', icon: 'none' });
@@ -265,11 +335,17 @@ async function doDissolve() {
           <text class="hub-title">切换家庭</text>
         </view>
 
-        <scroll-view class="hub-family-list" scroll-y :scroll-into-view="scrollIntoViewId">
+        <scroll-view
+          class="hub-family-list"
+          scroll-y
+          :scroll-top="familyListRestoreTop"
+          :scroll-into-view="scrollIntoViewId"
+          @scroll="snapshotFamilyListScroll"
+        >
           <view
             v-for="family in families"
             :key="family.id"
-            :id="family.id"
+            :id="getFamilyCardId(family.id)"
             class="hub-family-card"
             :class="{ active: family.id === currentFamilyId }"
           >
@@ -287,7 +363,7 @@ async function doDissolve() {
       </view>
 
       <!-- 管理视图 -->
-      <view v-else-if="managedFamily" class="hub-view">
+      <view v-if="view === 'manage' && managedFamily" class="hub-view">
         <view class="hub-header">
           <view class="hub-manage-nav">
             <text class="hub-back-arrow" @click="backToList">‹</text>
@@ -315,6 +391,12 @@ async function doDissolve() {
                   <SkeletonBlock width="80rpx" height="24rpx" />
                 </view>
               </view>
+            </view>
+
+            <view v-else-if="memberErrorMessage" class="hub-member-error">
+              <text class="hub-member-error-title">成员加载失败</text>
+              <text class="hub-member-error-copy">{{ memberErrorMessage }}</text>
+              <button class="hub-member-retry" @click="loadMembers">重试</button>
             </view>
 
             <view v-else class="hub-member-list">
@@ -353,27 +435,31 @@ async function doDissolve() {
       </view>
     </view>
 
-    <!-- 重命名弹窗（使用外部 GlassModal） -->
-    <view v-if="showRename" class="hub-rename-overlay" @click="showRename = false">
-      <view class="hub-rename-card" @click.stop>
-        <text class="hub-rename-title">重命名家庭</text>
+    <!-- 重命名弹窗：复用通用输入弹窗风格 -->
+    <GlassModal
+      :show="showRename"
+      symbol="家"
+      symbol-tone="family"
+      kicker="家庭资料"
+      title="重命名家庭"
+      secondary-text="取消"
+      primary-text="确认"
+      :primary-disabled="!canConfirmRename"
+      @secondary="closeRename"
+      @primary="confirmRename"
+    >
+      <view class="glass-modal-field hub-rename-field">
         <input
-          class="hub-rename-input"
+          class="glass-modal-input"
           :value="renameInput"
           @input="renameInput = ($event.target as HTMLInputElement).value"
           placeholder="新名称"
-          :focus="showRename"
+          placeholder-class="glass-modal-placeholder"
+          :maxlength="MAX_FAMILY_NAME_LENGTH"
+          :focus="renameInputFocus"
         />
-        <view class="hub-rename-actions">
-          <button class="hub-rename-cancel" @click="showRename = false">取消</button>
-          <button
-            class="hub-rename-confirm"
-            :disabled="!renameInput.trim() || renaming"
-            @click="confirmRename"
-          >确认</button>
-        </view>
       </view>
-    </view>
+    </GlassModal>
   </view>
 </template>
 
@@ -391,6 +477,7 @@ async function doDissolve() {
   backdrop-filter: blur(18rpx) saturate(112%);
   -webkit-backdrop-filter: blur(18rpx) saturate(112%);
   box-sizing: border-box;
+  animation: hub-backdrop-in 220ms ease-out both;
 }
 
 .hub-panel {
@@ -409,6 +496,9 @@ async function doDissolve() {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  transform-origin: bottom center;
+  will-change: transform, opacity;
+  animation: hub-panel-in 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .hub-view {
@@ -605,6 +695,47 @@ async function doDissolve() {
   gap: 16rpx;
 }
 
+.hub-member-error {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+  padding: 28rpx 24rpx;
+  border: 1rpx solid rgba(229, 72, 63, 0.14);
+  border-radius: 24rpx;
+  background: rgba(255, 247, 246, 0.72);
+  box-sizing: border-box;
+}
+
+.hub-member-error-title {
+  color: #e5483f;
+  font-size: 28rpx;
+  font-weight: 650;
+}
+
+.hub-member-error-copy {
+  color: rgba(16, 20, 24, 0.54);
+  font-size: 24rpx;
+  line-height: 1.45;
+}
+
+.hub-member-retry {
+  align-self: flex-start;
+  height: 56rpx;
+  margin: 4rpx 0 0;
+  padding: 0 24rpx;
+  border: 0;
+  border-radius: 999rpx;
+  background: rgba(229, 72, 63, 0.1);
+  color: #e5483f;
+  font-size: 24rpx;
+  font-weight: 600;
+  line-height: 56rpx;
+}
+
+.hub-member-retry::after {
+  border: 0;
+}
+
 .hub-member-list {
   border: 1rpx solid rgba(255, 255, 255, 0.64);
   border-radius: 24rpx;
@@ -715,95 +846,29 @@ async function doDissolve() {
   color: #e5483f;
 }
 
-/* 重命名弹窗 */
-.hub-rename-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 40rpx;
-  background: rgba(16, 20, 24, 0.12);
-  backdrop-filter: blur(12rpx);
-  -webkit-backdrop-filter: blur(12rpx);
-  box-sizing: border-box;
+.hub-rename-field {
+  margin-top: 34rpx;
 }
 
-.hub-rename-card {
-  width: 100%;
-  max-width: 580rpx;
-  padding: 42rpx 38rpx 36rpx;
-  border: 1rpx solid rgba(255, 255, 255, 0.72);
-  border-radius: 36rpx;
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.38)),
-    rgba(255, 255, 255, 0.36);
-  box-shadow: 0 34rpx 86rpx rgba(45, 74, 110, 0.18), inset 0 1rpx 0 rgba(255, 255, 255, 0.88);
-  backdrop-filter: blur(42rpx) saturate(130%);
-  -webkit-backdrop-filter: blur(42rpx) saturate(130%);
-  box-sizing: border-box;
+@keyframes hub-backdrop-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
-.hub-rename-title {
-  display: block;
-  margin-bottom: 28rpx;
-  color: #101418;
-  font-size: 38rpx;
-  font-weight: 720;
-}
+@keyframes hub-panel-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 44rpx, 0) scale(0.985);
+  }
 
-.hub-rename-input {
-  width: 100%;
-  height: 110rpx;
-  padding: 0 28rpx;
-  border: 2rpx solid rgba(16, 20, 24, 0.16);
-  border-radius: 28rpx;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(248, 252, 251, 0.72)),
-    rgba(255, 255, 255, 0.76);
-  color: #101418;
-  font-size: 36rpx;
-  font-weight: 650;
-  box-sizing: border-box;
-}
-
-.hub-rename-actions {
-  display: flex;
-  justify-content: center;
-  gap: 20rpx;
-  margin-top: 36rpx;
-}
-
-.hub-rename-cancel,
-.hub-rename-confirm {
-  min-width: 180rpx;
-  height: 76rpx;
-  margin: 0;
-  padding: 0 34rpx;
-  border-radius: 999rpx;
-  font-size: 26rpx;
-  line-height: 76rpx;
-}
-
-.hub-rename-cancel::after,
-.hub-rename-confirm::after {
-  border: 0;
-}
-
-.hub-rename-cancel {
-  border: 1rpx solid rgba(255, 255, 255, 0.64);
-  background: rgba(255, 255, 255, 0.32);
-  color: #4f7f78;
-}
-
-.hub-rename-confirm {
-  background: rgba(16, 20, 24, 0.82);
-  color: #ffffff;
-}
-
-.hub-rename-confirm[disabled] {
-  background: rgba(16, 20, 24, 0.44);
-  color: rgba(255, 255, 255, 0.72);
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
 }
 </style>

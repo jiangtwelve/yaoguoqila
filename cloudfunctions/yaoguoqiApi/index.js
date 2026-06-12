@@ -4,6 +4,7 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
 const db = cloud.database();
 const command = db.command;
+const MAX_FAMILY_NAME_LENGTH = 12;
 
 exports.main = async (event, context) => {
   try {
@@ -104,11 +105,9 @@ async function updateProfile(openId, input) {
 
 async function createFamily(openId, input) {
   const name = (input.name || '').trim();
-  if (!name) {
-    throw new Error('家庭名称不能为空');
-  }
+  validateFamilyName(name);
 
-  const userDoc = await ensureUser(openId);
+  await ensureUser(openId);
   const dup = await db.collection('families').where({ creatorId: openId, name }).get();
   if (dup.data.length > 0) {
     throw new Error('你已创建过同名家庭，请换一个名称');
@@ -143,7 +142,7 @@ async function createFamily(openId, input) {
   await db.collection('users').doc(openId).update({
     data: {
       familyIds: command.push(addRes._id),
-      currentFamilyId: userDoc.currentFamilyId || addRes._id,
+      currentFamilyId: addRes._id,
       updatedAt: now
     }
   });
@@ -170,7 +169,7 @@ async function renameFamily(openId, payload) {
   const familyId = (payload.familyId || '').trim();
   const name = (payload.name || '').trim();
   if (!familyId) throw new Error('家庭ID不能为空');
-  if (!name) throw new Error('家庭名称不能为空');
+  validateFamilyName(name);
 
   await assertFamilyOwner(openId, familyId);
 
@@ -376,6 +375,8 @@ async function assertFamilyOwner(openId, familyId) {
     .get();
 
   if (memberRes.data.length === 0) {
+    const familyRes = await db.collection('families').doc(familyId).get();
+    if (familyRes.data?.createdBy === openId || familyRes.data?.creatorId === openId) return;
     throw new Error('无权访问该家庭');
   }
 
@@ -651,6 +652,15 @@ function buildItemDocument({ familyId, input, createdBy, createdAt, updatedAt })
     createdAt,
     updatedAt
   };
+}
+
+function validateFamilyName(name) {
+  if (!name) {
+    throw new Error('家庭名称不能为空');
+  }
+  if (name.length > MAX_FAMILY_NAME_LENGTH) {
+    throw new Error(`家庭名称最多 ${MAX_FAMILY_NAME_LENGTH} 个字`);
+  }
 }
 
 function validateItemInput(input) {

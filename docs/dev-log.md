@@ -1,5 +1,5 @@
 ---
-updated: 2026-06-10
+updated: 2026-06-11
 ---
 
 # Dev Log
@@ -12,6 +12,8 @@ updated: 2026-06-10
 ## Index
 
 ### 当前连续性与 TASK-012
+- `2026-06-11 TASK-016 Planned`：按用户确认，将云函数结构模块化与后续物理云函数拆分评估规划为 post-v0.1 任务，当前不阻塞 TASK-012 验收。
+- `2026-06-11 TASK-012 Acceptance UX Refinement`：创建家庭成功后自动切换到新家庭并返回首页，取消创建时回到家庭切换弹窗，再次打开家庭弹窗自动滚动到当前家庭。类型检查、测试和小程序构建通过。
 - `2026-06-10 TASK-012 Implementation`：家庭切换与管理功能实现完成，含云函数 6 个新 action、FamilyHub 组件、服务层扩展、首页集成。构建通过，测试 19/19 pass。待用户验收。
 - `2026-06-10 TASK-012 Scope Expansion And Design`：家庭功能合并到 TASK-012，设计统一入口和角色权限方案，邀请功能保留给 TASK-014。
 - `2026-06-10 TASK-011 Accepted`：微信开发者工具真实主流程联调验收通过，TASK-011 标记完成，当前任务切换到 TASK-012。
@@ -51,6 +53,25 @@ updated: 2026-06-10
 ### 外部状态与 CloudBase
 - 最新可行动外部状态以 `docs/handoff.md` 为准。
 - 需要追溯 CloudBase 操作历史时，读 `2026-06-09 Clean Cloud Database For Acceptance`、`2026-06-08 TASK-011 Cloud Environment Reset And Deploy`、`2026-06-08 TASK-011 Started / CloudBase MCP Prepared`。
+
+## 2026-06-11 TASK-012 Acceptance UX Refinement
+- Goal: 修复家庭列表较长时，新建家庭创建成功后用户需要手动滚动查找的问题，并补齐创建弹窗取消和当前家庭定位细节。
+- Changes:
+  - `src/pages/home/index.vue`：创建家庭成功后依赖云函数原子设置当前家庭，关闭创建弹窗和家庭中枢，刷新首页并提示 `已切换到「家庭名」`。
+  - `cloudfunctions/yaoguoqiApi/index.js`：`createFamily` 创建成功后直接将 `currentFamilyId` 设置为新家庭，避免前端创建后再切换的两步非原子风险。
+  - `src/pages/home/index.vue`：新增 `cancelCreateFamily`，从家庭中枢打开创建弹窗后点击取消，只关闭创建弹窗，保留下方家庭切换弹窗。
+  - `src/components/FamilyHub.vue`：家庭列表卡片使用稳定节点 ID，并在打开面板或当前家庭变化时自动滚动到当前家庭卡片。
+  - `src/components/FamilyHub.vue`：修复重命名遮罩点击冒泡导致整个 FamilyHub 关闭的问题；成员列表加载失败时显示错误和重试入口。
+  - `src/components/FamilyHub.vue`：优化 FamilyHub 动画层级，移除内部 `hub-view` 延迟入场动画，只保留 `hub-backdrop` 和最外层 `hub-panel` 整体进入动画，避免外壳先出现、内容后动画的割裂感。
+  - `src/components/FamilyHub.vue`：重命名家庭弹窗改为复用 `GlassModal`，输入框、按钮和弹窗结构与设置昵称/创建家庭保持一致；补充本地 `hub-rename-field` 间距以匹配创建家庭弹窗。
+  - `cloudfunctions/yaoguoqiApi/index.js`：`assertFamilyOwner` 兼容历史家庭缺少 `familyMembers` 记录时的创建者 owner fallback。
+  - `src/components/FamilyHub.vue`：补充重命名弹窗首次打开延迟 focus，限制家庭名称最多 12 个字；解散家庭后回到切换弹窗，并按是否解散当前家庭决定是否刷新首页。
+  - `src/components/FamilyHub.vue`：修正 `v-show` 在小程序/flex/scroll-view 组合下导致列表和管理视图同时占位的问题；恢复列表/管理二选一渲染，并改为非响应式滚动快照 + 返回列表时一次性 `scrollTop` 恢复，避免滚动中响应式回写卡顿。
+  - `src/pages/home/index.vue`：创建家庭输入同步限制 12 个字；解散非当前家庭只更新弹窗列表，解散当前家庭刷新首页，若已无家庭则进入无家庭状态。
+  - `src/pages/home/index.vue`：首页骨架屏搜索框改为更轻的专用骨架样式，降低搜索框位置的深色块存在感。
+  - `cloudfunctions/yaoguoqiApi/index.js`：新增家庭名称长度校验，创建/重命名家庭均限制最多 12 个字。
+- Verification: `pnpm typecheck` 通过，`pnpm test` 19/19 pass，`pnpm build:mp-weixin` 成功（仅 Sass legacy JS API deprecation warning）。
+- Next: 需要用户在微信开发者工具中重新验收 TASK-012 创建家庭与家庭切换体验；验收前仍需重新部署 `yaoguoqiApi` 云函数。
 
 ## 2026-06-10 TASK-012 Implementation
 - Goal: 实现家庭切换与家庭管理功能，含后端云函数、前端服务层、UI 组件和首页集成。
