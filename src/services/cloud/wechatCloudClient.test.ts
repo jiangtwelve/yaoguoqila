@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { callCloudFunction, resetCloudInit } from './wechatCloudClient';
+import { callCloudFunction, resetCloudInit, uploadCloudFile } from './wechatCloudClient';
 
 describe('wechat cloud client', () => {
   afterEach(() => {
@@ -81,5 +81,36 @@ describe('wechat cloud client', () => {
     vi.stubGlobal('wx', { cloud: {} });
 
     await expect(callCloudFunction({ name: 'home.getFamilyHome', payload: {} })).rejects.toThrow('WeChat cloud adapter is only available in WeChat Mini Program runtime.');
+  });
+
+  it('uploads cloud files and returns fileID', async () => {
+    const uploadFile = vi.fn().mockResolvedValue({ fileID: 'cloud://env/item-images/a.jpg' });
+    vi.stubGlobal('wx', { cloud: { uploadFile, callFunction: vi.fn(), init: vi.fn() } });
+
+    const fileID = await uploadCloudFile({ cloudPath: 'item-images/a.jpg', filePath: 'wxfile://tmp/a.jpg' });
+
+    expect(fileID).toBe('cloud://env/item-images/a.jpg');
+    expect(uploadFile).toHaveBeenCalledWith({
+      cloudPath: 'item-images/a.jpg',
+      filePath: 'wxfile://tmp/a.jpg'
+    });
+  });
+
+  it('throws error when wx.cloud.uploadFile is missing', async () => {
+    vi.stubGlobal('wx', { cloud: { callFunction: vi.fn(), init: vi.fn() } });
+
+    await expect(uploadCloudFile({ cloudPath: 'item-images/a.jpg', filePath: 'wxfile://tmp/a.jpg' })).rejects.toThrow('WeChat cloud storage adapter is only available in WeChat Mini Program runtime.');
+  });
+
+  it('throws error when upload response has no fileID', async () => {
+    vi.stubGlobal('wx', {
+      cloud: {
+        uploadFile: vi.fn().mockResolvedValue({ errMsg: 'cloud.uploadFile:fail' }),
+        callFunction: vi.fn(),
+        init: vi.fn()
+      }
+    });
+
+    await expect(uploadCloudFile({ cloudPath: 'item-images/a.jpg', filePath: 'wxfile://tmp/a.jpg' })).rejects.toThrow('cloud.uploadFile:fail');
   });
 });

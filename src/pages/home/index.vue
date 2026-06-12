@@ -6,6 +6,7 @@ import GlassModal from '@/components/GlassModal.vue';
 import SkeletonBlock from '@/components/SkeletonBlock.vue';
 import type { FamilyHome, Item } from '@/domain/models';
 import { daysUntil } from '@/domain/expiry';
+import { getItemThumbnail } from '@/domain/itemImages';
 import { deleteItem, getFamilyHome, searchItems, updateProfile, createFamily } from '@/services/homeService';
 import { getNavigationSafeArea } from '@/utils/navigationSafeArea';
 import { consumeHomeRefreshRequest } from '@/utils/pageRefresh';
@@ -36,6 +37,8 @@ const swipeOffsetPx = ref(0);
 const deleteWidthPx = ref(76);
 const suppressNextTap = ref(false);
 const deletingItemId = ref('');
+const loadedCoverKeys = ref(new Set<string>());
+const failedCoverKeys = ref(new Set<string>());
 const profileNameInput = ref('');
 const savingProfile = ref(false);
 const familyNameInput = ref('');
@@ -236,7 +239,29 @@ function getItemMeta(item: Item): string {
 }
 
 function getItemCover(item: Item): string | null {
-  return item.imageUrls[0] ?? item.imageUrl ?? null;
+  return getItemThumbnail(item);
+}
+
+function getItemCoverKey(item: Item): string {
+  return `${item.id}:${getItemCover(item) ?? 'empty'}`;
+}
+
+function isItemCoverLoaded(item: Item): boolean {
+  return loadedCoverKeys.value.has(getItemCoverKey(item));
+}
+
+function isItemCoverFailed(item: Item): boolean {
+  return failedCoverKeys.value.has(getItemCoverKey(item));
+}
+
+function markItemCoverLoaded(item: Item) {
+  const key = getItemCoverKey(item);
+  loadedCoverKeys.value = new Set([...loadedCoverKeys.value, key]);
+}
+
+function markItemCoverFailed(item: Item) {
+  const key = getItemCoverKey(item);
+  failedCoverKeys.value = new Set([...failedCoverKeys.value, key]);
 }
 
 function getSwipeStyle(item: Item) {
@@ -586,7 +611,24 @@ function handleCreateFromHub() {
               @touchmove="handleItemTouchMove($event, item)"
               @touchend="handleItemTouchEnd($event, item)"
             >
-              <image v-if="getItemCover(item)" class="item-thumb" :src="getItemCover(item)!" mode="aspectFill" />
+              <view v-if="getItemCover(item)" class="item-thumb-wrap">
+                <view v-if="!isItemCoverLoaded(item)" class="item-thumb item-thumb-loading" :class="{ failed: isItemCoverFailed(item) }">
+                  <view class="placeholder-mark loading-placeholder-mark">
+                    <view class="placeholder-dot"></view>
+                    <view class="placeholder-stroke placeholder-stroke-left"></view>
+                    <view class="placeholder-stroke placeholder-stroke-right"></view>
+                  </view>
+                </view>
+                <image
+                  class="item-thumb item-thumb-image"
+                  :class="{ loaded: isItemCoverLoaded(item) }"
+                  :src="getItemCover(item)!"
+                  mode="aspectFill"
+                  lazy-load
+                  @load="markItemCoverLoaded(item)"
+                  @error="markItemCoverFailed(item)"
+                />
+              </view>
               <view v-else class="item-thumb item-thumb-fallback">
                 <view class="placeholder-mark">
                   <view class="placeholder-dot"></view>
@@ -1157,6 +1199,17 @@ function handleCreateFromHub() {
   border-bottom: 0;
 }
 
+.item-thumb-wrap {
+  position: relative;
+  flex: 0 0 auto;
+  width: 76rpx;
+  height: 76rpx;
+  border-radius: 18rpx;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.68);
+  box-shadow: inset 0 0 0 1rpx rgba(16, 20, 24, 0.04);
+}
+
 .item-thumb {
   flex: 0 0 auto;
   width: 76rpx;
@@ -1165,6 +1218,55 @@ function handleCreateFromHub() {
   overflow: hidden;
   background: rgba(255, 255, 255, 0.68);
   box-shadow: inset 0 0 0 1rpx rgba(16, 20, 24, 0.04);
+}
+
+.item-thumb-image {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transform: scale(1.02);
+  transition: opacity 180ms ease, transform 220ms ease;
+}
+
+.item-thumb-image.loaded {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.item-thumb-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.82), rgba(232, 246, 255, 0.72)),
+    rgba(255, 255, 255, 0.68);
+}
+
+.item-thumb-loading::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0.78) 46%, transparent 82%);
+  transform: translateX(-100%);
+  animation: item-thumb-loading 1.2s ease-in-out infinite;
+}
+
+.loading-placeholder-mark {
+  position: relative;
+  z-index: 1;
+  opacity: 0.62;
+}
+
+.item-thumb-loading.failed::after {
+  animation: none;
+}
+
+@keyframes item-thumb-loading {
+  to {
+    transform: translateX(100%);
+  }
 }
 
 .item-thumb-fallback {

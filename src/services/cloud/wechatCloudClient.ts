@@ -21,6 +21,8 @@ declare const wx: {
   cloud: {
     init: () => void;
     callFunction: (opts: Record<string, unknown>) => Promise<{ result: unknown; errMsg: string }>;
+    uploadFile?: (opts: { cloudPath: string; filePath: string }) => Promise<{ fileID?: string; statusCode?: number; errMsg?: string }>;
+    deleteFile?: (opts: { fileList: string[] }) => Promise<{ fileList?: Array<{ fileID: string; status: number; errMsg?: string }>; errMsg?: string }>;
   };
 };
 
@@ -46,6 +48,16 @@ export interface CloudFunctionRequest<TPayload> {
   payload: TPayload;
 }
 
+export interface CloudFileUploadRequest {
+  cloudPath: string;
+  filePath: string;
+}
+
+export interface CloudFileDeleteRequest {
+  fileIds: string[];
+}
+
+/** 调用统一云函数入口并返回业务结果。 */
 export async function callCloudFunction<TPayload, TResult>(request: CloudFunctionRequest<TPayload>): Promise<TResult> {
   if (typeof wx === 'undefined' || !wx.cloud || !wx.cloud.callFunction) {
     throw new Error('WeChat cloud adapter is only available in WeChat Mini Program runtime.');
@@ -66,4 +78,40 @@ export async function callCloudFunction<TPayload, TResult>(request: CloudFunctio
   }
 
   return response.result as TResult;
+}
+
+/** 上传本地文件到微信云存储并返回 fileID。 */
+export async function uploadCloudFile(request: CloudFileUploadRequest): Promise<string> {
+  if (typeof wx === 'undefined' || !wx.cloud || !wx.cloud.uploadFile) {
+    throw new Error('WeChat cloud storage adapter is only available in WeChat Mini Program runtime.');
+  }
+
+  ensureCloudInit();
+
+  const response = await wx.cloud.uploadFile({
+    cloudPath: request.cloudPath,
+    filePath: request.filePath
+  });
+
+  if (!response.fileID) {
+    throw new Error(response.errMsg || '图片上传失败');
+  }
+
+  return response.fileID;
+}
+
+/** 删除一组微信云存储文件。 */
+export async function deleteCloudFiles(fileIds: string[]): Promise<void> {
+  if (!fileIds.length) return;
+  if (typeof wx === 'undefined' || !wx.cloud || !wx.cloud.deleteFile) {
+    throw new Error('WeChat cloud storage adapter is only available in WeChat Mini Program runtime.');
+  }
+
+  ensureCloudInit();
+
+  const response = await wx.cloud.deleteFile({ fileList: fileIds });
+  const failed = response.fileList?.filter((file) => file.status !== 0) ?? [];
+  if (failed.length) {
+    throw new Error(failed[0].errMsg || '图片清理失败');
+  }
 }

@@ -3,9 +3,11 @@ import { computed, ref } from 'vue';
 import { onLoad, onPullDownRefresh, onShow } from '@dcloudio/uni-app';
 import AppNavBar from '@/components/AppNavBar.vue';
 import SkeletonBlock from '@/components/SkeletonBlock.vue';
+import { getItemImageFileIds, getItemThumbnail } from '@/domain/itemImages';
 import type { Item, ItemDetail } from '@/domain/models';
 import { daysUntil } from '@/domain/expiry';
 import { consumeItem, deleteItem, getItemDetail } from '@/services/homeService';
+import { previewItemImages } from '@/services/imageStorageService';
 import { getNavigationSafeArea } from '@/utils/navigationSafeArea';
 import { consumeItemDetailNeedsRefresh, markHomeNeedsRefresh } from '@/utils/pageRefresh';
 import { MOCK_PULL_DOWN_REFRESH_FAILURE, waitForFailedRefreshIndicator, waitForMinimumRefreshIndicator } from '@/utils/pullDownRefresh';
@@ -17,6 +19,8 @@ const loading = ref(true);
 const operating = ref(false);
 const pullRefreshState = ref<PullRefreshState>('idle');
 const errorMessage = ref('');
+const loadedImageUrls = ref(new Set<string>());
+const failedImageUrls = ref(new Set<string>());
 const detail = ref<ItemDetail | null>(null);
 const detailSafeArea = getNavigationSafeArea();
 const navTopPx = ref(detailSafeArea.navTopPx);
@@ -39,12 +43,8 @@ const navStyle = computed(() => ({
 const statusClass = computed(() => (item.value ? `status-${item.value.status.replace('_', '-')}` : ''));
 const statusText = computed(() => (item.value ? getStatusText(item.value) : ''));
 const daysText = computed(() => (item.value ? getDaysText(item.value) : ''));
-const coverImage = computed(() => (item.value ? item.value.imageUrls[0] ?? item.value.imageUrl ?? null : null));
-const itemImages = computed(() => {
-  if (!item.value) return [];
-
-  return item.value.imageUrls.length ? item.value.imageUrls : item.value.imageUrl ? [item.value.imageUrl] : [];
-});
+const coverImage = computed(() => (item.value ? getItemThumbnail(item.value) : null));
+const itemImages = computed(() => (item.value ? getItemImageFileIds(item.value) : []));
 const dateModeText = computed(() => {
   if (!item.value) return '';
   if (item.value.expiryInputMode === 'production_date_and_shelf_life') {
@@ -216,10 +216,26 @@ function getShelfLifeUnitText(unit: Item['shelfLifeUnit']): string {
   return '月';
 }
 
+function isImageLoaded(url: string): boolean {
+  return loadedImageUrls.value.has(url);
+}
+
+function isImageFailed(url: string): boolean {
+  return failedImageUrls.value.has(url);
+}
+
+function markImageLoaded(url: string) {
+  loadedImageUrls.value = new Set([...loadedImageUrls.value, url]);
+}
+
+function markImageFailed(url: string) {
+  failedImageUrls.value = new Set([...failedImageUrls.value, url]);
+}
+
 function previewImage(index: number) {
   if (!itemImages.value.length) return;
 
-  void uni.previewImage({
+  void previewItemImages({
     urls: itemImages.value,
     current: itemImages.value[index]
   });
@@ -272,7 +288,25 @@ function previewImage(index: number) {
           <view v-if="coverImage" class="hero-image-wrap">
             <swiper class="hero-swiper" indicator-dots circular indicator-color="rgba(255, 255, 255, 0.46)" indicator-active-color="#ffffff">
               <swiper-item v-for="(url, index) in itemImages" :key="url">
-                <image class="hero-image" :src="url" mode="aspectFill" @click="previewImage(index)" />
+                <view class="hero-image-stage">
+                  <view v-if="!isImageLoaded(url)" class="hero-image-loading" :class="{ failed: isImageFailed(url) }">
+                    <view class="empty-photo-mark hero-loading-mark">
+                      <view class="empty-photo-corner"></view>
+                      <view class="empty-photo-sun"></view>
+                      <view class="empty-photo-line empty-photo-line-long"></view>
+                      <view class="empty-photo-line empty-photo-line-short"></view>
+                    </view>
+                  </view>
+                  <image
+                    class="hero-image"
+                    :class="{ loaded: isImageLoaded(url) }"
+                    :src="url"
+                    mode="aspectFill"
+                    @load="markImageLoaded(url)"
+                    @error="markImageFailed(url)"
+                    @click="previewImage(index)"
+                  />
+                </view>
               </swiper-item>
             </swiper>
             <text v-if="itemImages.length > 1" class="image-count">{{ itemImages.length }} 张</text>
@@ -543,7 +577,9 @@ button::after {
 }
 
 .hero-swiper,
-.hero-image {
+.hero-image-stage,
+.hero-image,
+.hero-image-loading {
   width: 100%;
   height: 356rpx;
   border-radius: 26rpx;
@@ -555,8 +591,52 @@ button::after {
   box-shadow: inset 0 0 0 1rpx rgba(16, 20, 24, 0.04);
 }
 
+.hero-image-stage {
+  position: relative;
+}
+
 .hero-image {
+  position: absolute;
+  inset: 0;
   display: block;
+  opacity: 0;
+  transform: scale(1.015);
+  transition: opacity 180ms ease, transform 220ms ease;
+}
+
+.hero-image.loaded {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.hero-image-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.78), rgba(232, 246, 255, 0.72)),
+    rgba(255, 255, 255, 0.68);
+}
+
+.hero-image-loading::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0.76) 46%, transparent 82%);
+  transform: translateX(-100%);
+  animation: hero-image-loading 1.25s ease-in-out infinite;
+}
+
+.hero-image-loading.failed::after {
+  animation: none;
+}
+
+@keyframes hero-image-loading {
+  to {
+    transform: translateX(100%);
+  }
 }
 
 .image-count {

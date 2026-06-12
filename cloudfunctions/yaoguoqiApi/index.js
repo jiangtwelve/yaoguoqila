@@ -477,6 +477,7 @@ async function updateItem(openId, itemId, input) {
 
   await db.collection('items').doc(itemId).update({ data: updateData });
   await bumpLocationHistory(previous.familyId, input.locationName);
+  cleanupUnusedItemFiles(previous, { ...previous, ...updateData, _id: itemId });
   return normalizeItem({ ...previous, ...updateData, _id: itemId });
 }
 
@@ -493,8 +494,9 @@ async function consumeItem(openId, itemId) {
 }
 
 async function deleteItem(openId, itemId) {
-  await getItemWithAccess(openId, itemId);
+  const item = await getItemWithAccess(openId, itemId);
   await db.collection('items').doc(itemId).remove();
+  cleanupDeletedItemFiles(item);
 }
 
 async function ensureUser(openId) {
@@ -619,7 +621,8 @@ async function bumpLocationHistory(familyId, locationName) {
 }
 
 function buildItemDocument({ familyId, input, createdBy, createdAt, updatedAt }) {
-  const imageUrls = Array.isArray(input.imageUrls) ? input.imageUrls : [];
+  const images = normalizeInputImages(input);
+  const imageUrls = images.length ? images.map(image => image.fileId) : (Array.isArray(input.imageUrls) ? input.imageUrls : []);
   const locationName = (input.locationName || '').trim() || null;
   const note = input.note || null;
   const shelfLife = input.shelfLifeValue && input.shelfLifeUnit
@@ -631,6 +634,7 @@ function buildItemDocument({ familyId, input, createdBy, createdAt, updatedAt })
     name: input.name.trim(),
     imageUrl: imageUrls[0] || input.imageUrl || null,
     imageUrls,
+    images,
     photoFileIds: imageUrls,
     categoryId: input.categoryId || null,
     locationId: input.locationId || null,
@@ -672,6 +676,44 @@ function validateItemInput(input) {
   }
 }
 
+function normalizeInputImages(input) {
+  if (!Array.isArray(input.images)) return [];
+  return input.images
+    .filter(image => image && image.id && image.fileId)
+    .map(image => ({
+      id: String(image.id),
+      fileId: String(image.fileId),
+      md5: image.md5 ? String(image.md5) : '',
+      thumbnailFileId: image.thumbnailFileId ? String(image.thumbnailFileId) : null,
+      thumbnailMd5: image.thumbnailMd5 ? String(image.thumbnailMd5) : null,
+      createdAt: image.createdAt ? toIsoString(image.createdAt) : nowIso()
+    }));
+}
+
+function normalizeStoredImages(doc) {
+  if (Array.isArray(doc.images) && doc.images.length) {
+    return doc.images
+      .filter(image => image && image.fileId)
+      .map((image, index) => ({
+        id: image.id || `legacy_${doc._id || doc.id}_${index}`,
+        fileId: image.fileId,
+        md5: image.md5 || '',
+        thumbnailFileId: image.thumbnailFileId || null,
+        thumbnailMd5: image.thumbnailMd5 || null,
+        createdAt: toIsoString(image.createdAt || doc.createdAt)
+      }));
+  }
+
+  return normalizeImageUrls(doc).map((url, index) => ({
+    id: `legacy_${doc._id || doc.id}_${index}`,
+    fileId: url,
+    md5: '',
+    thumbnailFileId: null,
+    thumbnailMd5: null,
+    createdAt: toIsoString(doc.createdAt)
+  }));
+}
+
 function normalizeUser(doc, openId) {
   const displayName = doc.displayName || doc.nickname || '';
   return {
@@ -699,7 +741,8 @@ function normalizeFamily(doc, openId, explicitRole) {
 }
 
 function normalizeItem(doc) {
-  const imageUrls = normalizeImageUrls(doc);
+  const images = normalizeStoredImages(doc);
+  const imageUrls = images.length ? images.map(image => image.fileId) : normalizeImageUrls(doc);
   const expiresAt = doc.expiresAt || doc.expireDate;
   const locationName = doc.locationName || doc.location || null;
   const note = doc.note !== undefined ? doc.note : (doc.remark || null);
@@ -711,6 +754,7 @@ function normalizeItem(doc) {
     name: doc.name,
     imageUrl: doc.imageUrl || imageUrls[0] || null,
     imageUrls,
+    images,
     categoryId: doc.categoryId || null,
     locationId: doc.locationId || null,
     locationName,
@@ -733,6 +777,38 @@ function normalizeImageUrls(doc) {
   if (Array.isArray(doc.photoFileIds)) return doc.photoFileIds;
   if (doc.imageUrl) return [doc.imageUrl];
   return [];
+}
+
+function cleanupUnusedItemFiles(previous, next) {
+  const previousImages = normalizeStoredImages(previous);
+  const nextImages = normalizeStoredImages(next);
+  const nextIds = new Set(nextImages.map(image => image.id));
+  const nextFileIds = new Set(nextImages.flatMap(getImageFileIds));
+  const removedFileIds = previousImages
+    .filter(image => !nextIds.has(image.id))
+    .flatMap(getImageFileIds)
+    .filter(fileId => !nextFileIds.has(fileId));
+
+  deleteCloudFilesSafely(removedFileIds);
+}
+
+function cleanupDeletedItemFiles(item) {
+  deleteCloudFilesSafely(normalizeStoredImages(item).flatMap(getImageFileIds));
+}
+
+function getImageFileIds(image) {
+  return [image.fileId, image.thumbnailFileId].filter(Boolean);
+}
+
+async function deleteCloudFilesSafely(fileIds) {
+  const cloudFileIds = [...new Set(fileIds.filter(fileId => typeof fileId === 'string' && fileId.startsWith('cloud://')))];
+  if (!cloudFileIds.length) return;
+
+  try {
+    await cloud.deleteFile({ fileList: cloudFileIds });
+  } catch (error) {
+    console.warn('图片清理失败', error);
+  }
 }
 
 function computeStatus(expiresAt) {

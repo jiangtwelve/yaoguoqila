@@ -1,17 +1,16 @@
 ---
 status: active
-current_task: TASK-012
+current_task: TASK-013
 current_release: v0.1
-updated: 2026-06-11
+updated: 2026-06-12
 ---
 
 # Tasks
 
 ## Current
-- TASK-012: 家庭切换与家庭管理（实现完成，待验收）。`release: v0.1`
+- TASK-013: 图片云存储 adapter 正式接入。`release: v0.1`
 
 ## Ready
-- TASK-013: 图片云存储 adapter 正式接入。`release: v0.1`
 - TASK-014: 加入家庭与邀请最小流程。`release: v0.1`
 - TASK-015: v0.1 测试版验收与体验修复。`release: v0.1`
 
@@ -41,3 +40,4 @@ updated: 2026-06-11
 - TASK-009: 全页面下拉刷新验收完成。
 - TASK-010: API contract 验证完成。
 - TASK-011: 微信云开发后端基础能力验收完成。
+- TASK-012: 家庭切换与家庭管理验收完成。

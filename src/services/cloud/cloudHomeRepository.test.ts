@@ -13,6 +13,7 @@ const itemInput: ItemInput = {
   name: '牛奶',
   imageUrl: null,
   imageUrls: [],
+  images: [],
   categoryId: null,
   locationId: null,
   locationName: '冰箱',

@@ -4,8 +4,11 @@ import { onLoad } from '@dcloudio/uni-app';
 import AppNavBar from '@/components/AppNavBar.vue';
 import GlassModal from '@/components/GlassModal.vue';
 import SkeletonBlock from '@/components/SkeletonBlock.vue';
-import type { ExpiryInputMode, Item, ItemFormOptions, ItemInput, ShelfLifeUnit } from '@/domain/models';
+import type { EditableImage, RemoteEditableImage } from '@/services/contracts/imageStorage';
+import { getItemImages } from '@/domain/itemImages';
+import type { ExpiryInputMode, Item, ItemFormOptions, ItemImage, ItemInput, ShelfLifeUnit } from '@/domain/models';
 import { createItem, getItemDetail, getItemFormOptions, updateItem } from '@/services/homeService';
+import { chooseItemImages, deleteUploadedItemImages, prepareItemImagesForSave } from '@/services/imageStorageService';
 import { getNavigationSafeArea } from '@/utils/navigationSafeArea';
 import { markHomeNeedsRefresh, markItemDetailNeedsRefresh } from '@/utils/pageRefresh';
 
@@ -18,6 +21,7 @@ interface RiskyCreateConfirmState {
 }
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const MAX_ITEM_IMAGES = 6;
 const loading = ref(true);
 const saving = ref(false);
 const errorMessage = ref('');
@@ -27,7 +31,8 @@ const riskyCreateConfirm = ref<RiskyCreateConfirmState | null>(null);
 let resolveRiskyCreateConfirm: ((confirmed: boolean) => void) | null = null;
 
 const name = ref('');
-const imageUrls = ref<string[]>([]);
+const images = ref<EditableImage[]>([]);
+const previousImages = ref<ItemImage[]>([]);
 const note = ref('');
 const locationName = ref('');
 const expiryInputMode = ref<ExpiryInputMode>('explicit_date');
@@ -90,6 +95,12 @@ const calculatedStatusClass = computed(() => {
 
   return `calculated-${getFormItemStatus(calculatedExpiresAt.value).replace('_', '-')}`;
 });
+const imagePreviewItems = computed(() => images.value.map((image) => ({
+  key: image.kind === 'remote' ? image.id : image.localId,
+  url: image.kind === 'remote' ? image.fileId : image.localPath
+})));
+const imagePreviewUrls = computed(() => imagePreviewItems.value.map((image) => image.url));
+const draftId = `draft_${Date.now()}`;
 
 onLoad((query) => {
   itemId.value = typeof query?.id === 'string' ? query.id : '';
@@ -117,8 +128,10 @@ async function loadForm() {
 }
 
 function fillForm(item: Item, fallbackLocationName: string | null) {
+  const itemImages = getItemImages(item);
   name.value = item.name;
-  imageUrls.value = item.imageUrls.length ? [...item.imageUrls] : item.imageUrl ? [item.imageUrl] : [];
+  previousImages.value = itemImages;
+  images.value = itemImages.map(toRemoteEditableImage);
   note.value = item.note ?? '';
   locationName.value = item.locationName ?? fallbackLocationName ?? '';
   expiryInputMode.value = item.expiryInputMode;
@@ -128,23 +141,32 @@ function fillForm(item: Item, fallbackLocationName: string | null) {
   shelfLifeUnit.value = item.shelfLifeUnit ?? 'month';
 }
 
-function chooseImage() {
+async function chooseImage() {
   if (formLocked.value) return;
 
-  uni.chooseImage({
-    count: Math.max(1, 9 - imageUrls.value.length),
-    sizeType: ['compressed'],
-    sourceType: ['album', 'camera'],
-    success: (result) => {
-      imageUrls.value = [...imageUrls.value, ...result.tempFilePaths].slice(0, 9);
+  errorMessage.value = '';
+
+  try {
+    const result = await chooseItemImages({
+      currentImages: images.value,
+      previousImages: previousImages.value,
+      maxCount: MAX_ITEM_IMAGES
+    });
+    const nextImages = [...images.value, ...result.images].slice(0, MAX_ITEM_IMAGES);
+    images.value = nextImages;
+
+    if (result.rejectedFormatCount > 0) {
+      errorMessage.value = '已忽略不支持的动图或非普通图片';
     }
-  });
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '选择图片失败';
+  }
 }
 
 function removeImage(index: number) {
   if (formLocked.value) return;
 
-  imageUrls.value = imageUrls.value.filter((_, currentIndex) => currentIndex !== index);
+  images.value = images.value.filter((_, currentIndex) => currentIndex !== index);
 }
 
 function setExpiryMode(mode: ExpiryInputMode) {
@@ -249,21 +271,6 @@ async function saveItem() {
   const locationText = locationName.value.trim();
   const matchedLocation = formOptions.locations.find((location) => location.name === locationText);
   const finalExpiresAt = expiryInputMode.value === 'explicit_date' ? expiresAt.value : calculatedExpiresAt.value;
-  const input: ItemInput = {
-    name: name.value.trim(),
-    imageUrl: imageUrls.value[0] ?? null,
-    imageUrls: imageUrls.value,
-    categoryId: null,
-    locationId: matchedLocation?.id ?? null,
-    locationName: locationText || null,
-    expiryInputMode: expiryInputMode.value,
-    productionDate: expiryInputMode.value === 'production_date_and_shelf_life' ? productionDate.value : null,
-    shelfLifeValue: expiryInputMode.value === 'production_date_and_shelf_life' ? Number(shelfLifeValue.value) : null,
-    shelfLifeUnit: expiryInputMode.value === 'production_date_and_shelf_life' ? shelfLifeUnit.value : null,
-    expiresAt: finalExpiresAt,
-    reminderDaysBefore: [1, 3],
-    note: note.value.trim() || null
-  };
 
   if (!itemId.value) {
     const confirmed = await confirmRiskyNewItem(finalExpiresAt);
@@ -273,7 +280,33 @@ async function saveItem() {
   saving.value = true;
   void uni.showLoading({ title: '保存中', mask: true });
 
+  let uploadedFileIds: string[] = [];
   try {
+    const prepared = await prepareItemImagesForSave({
+      familyId: formOptions.family.id,
+      itemId: itemId.value || undefined,
+      draftId,
+      images: images.value,
+      previousImages: previousImages.value
+    });
+    uploadedFileIds = prepared.uploadedFileIds;
+    const preparedImageUrls = prepared.images.map((image) => image.fileId);
+    const input: ItemInput = {
+      name: name.value.trim(),
+      imageUrl: preparedImageUrls[0] ?? null,
+      imageUrls: preparedImageUrls,
+      images: prepared.images,
+      categoryId: null,
+      locationId: matchedLocation?.id ?? null,
+      locationName: locationText || null,
+      expiryInputMode: expiryInputMode.value,
+      productionDate: expiryInputMode.value === 'production_date_and_shelf_life' ? productionDate.value : null,
+      shelfLifeValue: expiryInputMode.value === 'production_date_and_shelf_life' ? Number(shelfLifeValue.value) : null,
+      shelfLifeUnit: expiryInputMode.value === 'production_date_and_shelf_life' ? shelfLifeUnit.value : null,
+      expiresAt: finalExpiresAt,
+      reminderDaysBefore: [1, 3],
+      note: note.value.trim() || null
+    };
     let savedItemId: string | undefined;
 
     if (itemId.value) {
@@ -291,9 +324,14 @@ async function saveItem() {
     uni.hideLoading();
     uni.navigateBack();
   } catch (error) {
+    if (uploadedFileIds.length) {
+      void deleteUploadedItemImages(uploadedFileIds).catch((cleanupError) => {
+        console.warn('图片清理失败', cleanupError);
+      });
+    }
     uni.hideLoading();
     errorMessage.value = error instanceof Error ? error.message : '保存失败';
-    void uni.showToast({ title: '保存失败', icon: 'none' });
+    void uni.showToast({ title: errorMessage.value, icon: 'none' });
   } finally {
     saving.value = false;
   }
@@ -359,6 +397,10 @@ function closeRiskyCreateConfirm(confirmed: boolean) {
 function goBack() {
   uni.navigateBack();
 }
+
+function toRemoteEditableImage(image: ItemImage): RemoteEditableImage {
+  return { ...image, kind: 'remote' };
+}
 </script>
 
 <template>
@@ -404,14 +446,14 @@ function goBack() {
       <view v-else class="form" :class="{ 'is-locked': formLocked }">
         <view class="photo-field">
           <view class="photo-grid">
-            <view v-for="(url, index) in imageUrls" :key="url" class="photo-tile">
-              <image class="photo-preview" :src="url" mode="aspectFill" />
+            <view v-for="(image, index) in imagePreviewItems" :key="image.key" class="photo-tile">
+              <image class="photo-preview" :src="image.url" mode="aspectFill" />
               <text v-if="index === 0" class="cover-badge">封面</text>
               <button class="remove-photo" :disabled="formLocked" @click="removeImage(index)">×</button>
             </view>
-            <button v-if="imageUrls.length < 9" class="photo-picker" :disabled="formLocked" @click="chooseImage">
+            <button v-if="imagePreviewUrls.length < MAX_ITEM_IMAGES" class="photo-picker" :disabled="formLocked" @click="chooseImage">
               <text class="photo-plus">＋</text>
-              <text class="photo-copy">{{ imageUrls.length ? '继续添加' : '上传图片' }}</text>
+              <text class="photo-copy">{{ imagePreviewUrls.length ? '继续添加' : '上传图片' }}</text>
             </button>
           </view>
         </view>

@@ -1,5 +1,5 @@
 ---
-updated: 2026-06-11
+updated: 2026-06-12
 ---
 
 # Dev Log
@@ -10,6 +10,13 @@ updated: 2026-06-11
 - 若新增日志超过 5-8 条或出现新的长期主题，应同步更新本索引。
 
 ## Index
+
+### 当前连续性与 TASK-013
+- `2026-06-12 TASK-013 Image Loading Resume Verification`：恢复会话后复核首页缩略图和详情页 hero 图片 loading/淡入实现，重新运行类型检查、单测和小程序构建通过。
+- `2026-06-12 TASK-013 Upload Experience Refinement`：根据用户验收反馈，补充选择大图本地处理提示、保存上传阶段文案，避免保存成功前图片重渲染闪动，并把云存储路径改为按日期和 item/draft scope 分区，便于控制台定位。
+- `2026-06-12 TASK-013 Upload Picker Runtime Fix`：修复点击上传图片时报 `undefined is not an object (evaluating 'e.index')`，平台图片封装改用微信小程序原生 `wx.chooseImage` / `wx.previewImage`，重新验证通过。
+- `2026-06-12 TASK-013 Implementation`：新增图片存储 service/adapter 边界，cloud 模式保存前上传本地图片到微信云存储，表单和详情页改走 service；类型检查、测试和小程序构建通过，待用户验收。
+- `2026-06-12 TASK-012 Accepted / TASK-013 Started`：用户确认 TASK-012 验收完成，任务状态切换为 done；TASK-013 图片云存储 adapter 正式接入切换为 Current。
 
 ### 当前连续性与 TASK-012
 - `2026-06-11 TASK-016 Planned`：按用户确认，将云函数结构模块化与后续物理云函数拆分评估规划为 post-v0.1 任务，当前不阻塞 TASK-012 验收。
@@ -53,6 +60,49 @@ updated: 2026-06-11
 ### 外部状态与 CloudBase
 - 最新可行动外部状态以 `docs/handoff.md` 为准。
 - 需要追溯 CloudBase 操作历史时，读 `2026-06-09 Clean Cloud Database For Acceptance`、`2026-06-08 TASK-011 Cloud Environment Reset And Deploy`、`2026-06-08 TASK-011 Started / CloudBase MCP Prepared`。
+
+## 2026-06-12 TASK-013 Image Loading Resume Verification
+- Goal: 恢复“持续优化上传图片”会话后，继续确认首页缩略图与物品详情页图片加载 loading 效果是否已落地。
+- Result: 当前工作区已包含首页缩略图固定占位、shimmer loading、加载完成淡入和失败占位；详情页 hero 轮播已包含图片级固定占位、shimmer loading、加载完成淡入和失败占位。页面仍通过 `imageStorageService` / `itemImages` helper 获取展示资源，未回退到页面直连 cloud client。
+- Verification: `pnpm typecheck` 通过；`pnpm test` 35/35 pass；`pnpm build:mp-weixin` 成功（仅 Sass legacy JS API deprecation warning）。
+- Next: 仍需用户在微信开发者工具验收首页有图物品缩略图加载前占位、加载后淡入，以及详情页骨架消失后 hero 图片不出现明显空白。
+
+## 2026-06-12 TASK-013 Upload Experience Refinement
+- Issue: 用户一次选择 5 张大图后，图片第一时间没有上传云存储符合预期，但本地读取/MD5 处理耗时期间页面缺少反馈；点击保存后全局 loading 文案不区分上传与保存；保存成功前图片从本地路径替换成 `cloud://` fileID 导致整组图片闪动；云存储路径按 `familyId/scopeId` 不够直观，新增物品使用 `draftId` 时用户难以在控制台定位。
+- Fix: `src/pages/item-form/index.vue` 先展示本地图片预览；按性能优先方案移除前端图片内容读取、后台 MD5 和保存阶段 MD5 去重/复用，避免 6 张大图后台识别占用小程序交互资源；上传数量限制仍为最多 6 张但不在上传区额外增加说明 UI；`uniImage` 对可识别 `.gif` 路径做 best-effort 过滤，过滤提示沿用现有错误文本区域，不新增上传区格式说明。保存 loading 统一显示 `保存中`，避免上传阶段和物品保存阶段切换过快造成文案割裂；保存成功返回前不再把表单图片从 local 替换为 remote。
+- Fix: `src/pages/home/index.vue` 为首页物品缩略图增加固定占位和加载完成淡入；有图卡片在 `thumbnailFileId` / 封面图加载完成前显示同尺寸 shimmer 占位，加载失败时保留占位，避免列表出现后缩略图区域空白或突然跳出。
+- Fix: `src/pages/item-detail/index.vue` 为详情页 hero 图片轮播增加图片级占位、加载失败占位和加载完成淡入，避免详情骨架屏消失后图片区域短暂空白。
+- Fix: `src/services/cloud/cloudImageStorage.ts` 将云存储路径调整为 `item-images/{familyId}/{yyyy-mm-dd}/{itemId或draftId}/{imageId}` 与 `item-thumbnails/{familyId}/{yyyy-mm-dd}/{itemId或draftId}/{imageId}.jpg`，便于按日期和物品/草稿 scope 在控制台定位。新增物品仍使用 `draftId`，避免先创建空 item 后上传失败产生脏数据。
+- Verification: `pnpm typecheck` 通过；`pnpm test` 35/35 pass；`pnpm build:mp-weixin` 成功（仅 Sass legacy JS API deprecation warning）。待用户在微信开发者工具复验大图选择、保存上传和云存储路径。
+
+## 2026-06-12 TASK-013 Upload Picker Runtime Fix
+- Issue: 用户在微信开发者工具点击「上传图片」时报 `undefined is not an object (evaluating 'e.index')`。构建产物中 service 层的 `uni.chooseImage` 被编译为 `vendor.index.chooseImage`，在该运行上下文中 `vendor.index` 为 `undefined`。
+- Fix: 修改 `src/services/platform/uniImage.ts`，在 service 封装内通过 `globalThis.wx` 获取微信小程序原生 `chooseImage` / `previewImage`；同时取消选择图片时返回空数组，选择失败时只更新页面错误文本，避免再触发页面 catch 中的 `uni.showToast` 编译代理。页面仍然只调用 `imageStorageService`，不直接依赖平台 API 或 cloud client。
+- Verification: `pnpm typecheck` 通过；`pnpm test` 33/33 pass；`pnpm build:mp-weixin` 成功（仅 Sass legacy JS API deprecation warning）。构建产物已不再通过 `vendor.index.chooseImage` 调用图片选择，选择图片 catch 分支也不再调用 `vendor.index.showToast`。
+
+## 2026-06-12 TASK-013 Implementation
+- Goal: 按 TASK-013 接入图片云存储 adapter，让页面通过 service 处理图片选择、保存前上传和预览，保持 mock/cloud 两种模式可用。
+- Changes:
+  - 新增 `src/services/contracts/imageStorage.ts`、`src/services/adapters/imageStorage.ts`、`src/services/imageStorageService.ts`，建立图片存储 service/adapter 边界。
+  - 新增 `src/services/mock/mockImageStorage.ts`：mock 模式选择图片后保留本地临时路径或静态图片地址，预览走统一 service。
+  - 新增 `src/services/cloud/cloudImageStorage.ts`：cloud 模式保存前上传 `wxfile://`、`http://tmp/` 或本地路径图片到微信云存储，跳过已有 `cloud://`、`http(s)` 和 `/static` 稳定地址，并保持图片顺序。
+  - 新增 `src/services/platform/uniImage.ts`：集中封装 `uni.chooseImage` 和 `uni.previewImage`，避免页面重复直接调用。
+  - 扩展 `src/services/cloud/wechatCloudClient.ts`：新增 `uploadCloudFile`，复用 `wx.cloud.init`，对非微信运行时、缺少 `uploadFile` 或缺少 `fileID` 给出明确错误。
+  - 修改 `src/pages/item-form/index.vue`：图片选择和保存前图片准备改走 `imageStorageService`；保存时使用上传后的 `imageUrls` 和首图 `imageUrl`。
+  - 修改 `src/pages/item-detail/index.vue`：图片预览改走 `imageStorageService`。
+  - 新增/扩展测试：image storage adapter 选择、cloud 图片上传判断、云存储路径生成、`uploadCloudFile` 成功/失败路径。
+- Verification: `pnpm typecheck` 通过；`pnpm test` 30/30 pass；`pnpm build:mp-weixin` 成功（仅 Sass legacy JS API deprecation warning）。
+- Next: 需要用户在微信开发者工具验收 TASK-013，重点验证 mock/cloud 模式下新增图片保存、首页封面、详情多图和预览；cloud 模式需确认云存储 fileID 展示稳定。
+
+## 2026-06-12 TASK-012 Accepted / TASK-013 Started
+- Goal: 按用户确认将 TASK-012 标记为验收完成，并准备开始 TASK-013 图片云存储 adapter 正式接入。
+- Result: TASK-012 状态更新为 `done`，`acceptance_status: accepted`；TASK-013 状态更新为 `current`，继续归属 `v0.1` 且需要用户验收。
+- Changes:
+  - `docs/tasks.md`：Current 从 TASK-012 切换到 TASK-013，TASK-012 移入 Done。
+  - `docs/tasks/TASK-012-family-switch.md`：状态改为 `done`，验收状态改为 `accepted`。
+  - `docs/tasks/TASK-013-cloud-storage-adapter.md`：状态改为 `current`。
+  - `docs/handoff.md`：更新为 TASK-013 接手状态、下一步、关键文件和注意事项。
+- Next: 梳理现有图片选择、保存、展示和预览链路，设计并实现 storage service/adapter 抽象，保持 mock/cloud 两种模式可用。
 
 ## 2026-06-11 TASK-012 Acceptance UX Refinement
 - Goal: 修复家庭列表较长时，新建家庭创建成功后用户需要手动滚动查找的问题，并补齐创建弹窗取消和当前家庭定位细节。

@@ -54,12 +54,22 @@ export interface Category {
   name: string;
 }
 
+export interface ItemImage {
+  id: string;
+  fileId: string;
+  md5: string | null;
+  thumbnailFileId: string | null;
+  thumbnailMd5: string | null;
+  createdAt: string;
+}
+
 export interface Item {
   id: string;
   familyId: string;
   name: string;
   imageUrl: string | null;
   imageUrls: string[];
+  images?: ItemImage[];
   categoryId: string | null;
   locationId: string | null;
   locationName?: string | null;
@@ -118,6 +128,7 @@ export interface ItemInput {
   name: string;
   imageUrl: string | null;
   imageUrls: string[];
+  images?: ItemImage[];
   categoryId: string | null;
   locationId: string | null;
   locationName?: string | null;

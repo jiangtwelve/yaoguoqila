@@ -1,14 +1,14 @@
 ---
 id: TASK-012
 title: 家庭切换与家庭管理
-status: current
+status: done
 type: feature
 release: v0.1
 release_required: true
 dependencies: [TASK-011]
 requires_user_acceptance: true
-acceptance_status: pending
-updated: 2026-06-11
+acceptance_status: accepted
+updated: 2026-06-12
 ---
 
 # TASK-012: 家庭切换与家庭管理
